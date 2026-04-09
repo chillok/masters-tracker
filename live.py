@@ -26,8 +26,9 @@ ENTRANTS_PATH = "entrants.json"
 SITE_URL = "https://chillok.github.io/masters-tracker"
 BANNER_SRC = "banner.jpg"
 HISTORY_FILENAME = "history.json"
-HISTORY_WINDOW_MIN = 60       # trim snapshots older than this
-DELTA_WINDOW_MIN = 25         # minimum age of reference snapshot for rank-delta arrow
+HISTORY_WINDOW_MIN = 90       # trim snapshots older than this
+DELTA_TARGET_AGE_MIN = 30     # preferred age of reference snapshot for rank-delta arrow
+DELTA_MAX_AGE_MIN = 90        # ignore snapshots older than this when picking a reference
 DUBLIN = ZoneInfo("Europe/Dublin")
 
 
@@ -259,19 +260,24 @@ def load_history():
 
 
 def compute_deltas(history, current_ranks, now):
-    """Return {entrant_name: 'up'|'down'|None} comparing to a ~30-min-old snapshot."""
-    candidates = []
+    """Return {entrant_name: 'up'|'down'|None} comparing to a reference snapshot.
+
+    The reference is the snapshot whose age is closest to DELTA_TARGET_AGE_MIN,
+    ignoring anything older than DELTA_MAX_AGE_MIN. With a 15-min CI cadence the
+    second run already has a ~15-min-old reference, so arrows appear quickly.
+    """
+    usable = []
     for snap in history:
         try:
             age_min = (now - _parse_iso(snap["ts"])).total_seconds() / 60
         except (KeyError, ValueError):
             continue
-        if age_min >= DELTA_WINDOW_MIN:
-            candidates.append((age_min, snap))
-    if not candidates:
+        if age_min <= 0 or age_min > DELTA_MAX_AGE_MIN:
+            continue
+        usable.append((age_min, snap))
+    if not usable:
         return {name: None for name in current_ranks}
-    # Newest snapshot that is still old enough
-    _, ref = min(candidates, key=lambda c: c[0])
+    _, ref = min(usable, key=lambda c: abs(c[0] - DELTA_TARGET_AGE_MIN))
     prev_ranks = ref.get("ranks", {})
     deltas = {}
     for name, rank in current_ranks.items():
@@ -314,7 +320,7 @@ def render_html(rows, out_path, updated_at, deltas):
     """Render the standings as a self-contained HTML page."""
     esc = html_mod.escape
 
-    header_cells = ["#", "Entrant", "Total", "Players"]
+    header_cells = ["#", "Entrant", "Players"]
     thead = "".join(f"<th>{esc(h)}</th>" for h in header_cells)
 
     ranks = compute_ranks(rows)
@@ -333,15 +339,27 @@ def render_html(rows, out_path, updated_at, deltas):
 
         player_lines = []
         for p, _score, thru, raw in scores:
-            pick_text = fmt_pick(p, raw, thru)
             pcls = "player pending" if is_pending(thru) else "player"
-            player_lines.append(f'<div class="{pcls}">{esc(pick_text)}</div>')
+            main = f"{p} {raw}"
+            sub = thru_display(thru)
+            player_lines.append(
+                f'<div class="{pcls}">'
+                f'<div class="player-main">{esc(main)}</div>'
+                f'<div class="player-sub">{esc(sub)}</div>'
+                f"</div>"
+            )
         players_html = "".join(player_lines)
+
+        entrant_cell = (
+            f'<td class="entrant">'
+            f'<div class="entrant-name">{esc(name)}</div>'
+            f'<div class="score-badge">{esc(fmt_total(total))}</div>'
+            f"</td>"
+        )
 
         cells = [
             f'<td class="num">{rank}{arrow}</td>',
-            f'<td class="entrant">{esc(name)}</td>',
-            f'<td class="num total">{esc(fmt_total(total))}</td>',
+            entrant_cell,
             f'<td class="players">{players_html}</td>',
         ]
         tbody_rows.append(f"<tr{cls}>{''.join(cells)}</tr>")
@@ -435,16 +453,41 @@ def render_html(rows, out_path, updated_at, deltas):
   }}
   tbody tr:nth-child(even) td {{ background: var(--alt); }}
   tbody tr.leader td.num,
-  tbody tr.leader td.entrant,
-  tbody tr.leader td.total {{ font-weight: 700; color: var(--green); }}
+  tbody tr.leader td.entrant .entrant-name {{ font-weight: 700; color: var(--green); }}
   td.num {{ text-align: right; white-space: nowrap; }}
-  td.total {{ font-weight: 600; }}
+  td.entrant {{ white-space: nowrap; }}
+  td.entrant .entrant-name {{ line-height: 1.3; }}
+  .score-badge {{
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 2.6em;
+    height: 2.2em;
+    padding: 0 .6em;
+    margin-top: .4rem;
+    border-radius: 1.1em;
+    background: var(--green);
+    color: white;
+    font-weight: 700;
+    font-size: .9em;
+    letter-spacing: .02em;
+  }}
   td.players .player {{
     display: block;
-    line-height: 1.45;
+    line-height: 1.3;
+    margin: 0 0 .45rem;
+  }}
+  td.players .player:last-child {{ margin-bottom: 0; }}
+  td.players .player-main {{ white-space: nowrap; }}
+  td.players .player-sub {{
+    font-size: .72em;
+    color: var(--muted);
+    line-height: 1.2;
+    margin-top: .05rem;
     white-space: nowrap;
   }}
-  td.players .player.pending {{ color: var(--faded); }}
+  td.players .player.pending .player-main {{ color: var(--faded); }}
+  td.players .player.pending .player-sub {{ color: var(--faded); }}
   .arrow {{ font-size: .9em; }}
   .arrow.up   {{ color: var(--up); }}
   .arrow.down {{ color: var(--down); }}
@@ -458,7 +501,8 @@ def render_html(rows, out_path, updated_at, deltas):
     h1 {{ font-size: 1.1rem; }}
     .banner {{ width: 140px; height: 140px; border-width: 3px; }}
     thead th, tbody td {{ padding: .5rem .55rem; }}
-    td.players .player {{ white-space: normal; }}
+    td.players .player-main,
+    td.players .player-sub {{ white-space: normal; }}
   }}
 </style>
 </head>
