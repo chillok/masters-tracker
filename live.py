@@ -373,7 +373,7 @@ def render_html(rows, out_path, updated_at, deltas):
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta http-equiv="refresh" content="600">
+<meta http-equiv="refresh" content="300">
 <title>The Guinness Storehouse — Live Standings</title>
 <style>
   :root {{
@@ -517,7 +517,7 @@ def render_html(rows, out_path, updated_at, deltas):
   <div class="header">
     <img class="banner" src="banner.jpg" alt="">
     <h1>The Guinness Storehouse LIVE STANDINGS</h1>
-    <div class="meta">Updated {esc(updated_str)} · <span class="rel-time" data-iso="{esc(updated_iso)}">just now</span> · refreshes every 10 min</div>
+    <div class="meta">Updated {esc(updated_str)} · <span class="rel-time" data-iso="{esc(updated_iso)}">just now</span> · refreshes every 5 min</div>
   </div>
   <div class="table-wrap">
     <table>
@@ -546,7 +546,7 @@ def render_html(rows, out_path, updated_at, deltas):
       txt = hrs + 'h ' + (mins % 60) + 'm ago';
     }}
     el.textContent = txt;
-    el.classList.toggle('stale', mins >= 20);
+    el.classList.toggle('stale', mins >= 15);
   }}
   render();
   setInterval(render, 30000);
