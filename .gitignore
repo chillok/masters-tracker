@@ -1,0 +1,7 @@
+__pycache__/
+*.pyc
+.DS_Store
+
+# Generated artifacts (built fresh by CI)
+standings.png
+_site/

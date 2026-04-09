@@ -1,0 +1,109 @@
+{
+  "entrants": [
+    {
+      "name": "Cillian O'Keeffe",
+      "players": [
+        { "name": "Tommy Fleetwood", "odds": "22/1" },
+        { "name": "Matt Fitzpatrick", "odds": "25/1" },
+        { "name": "Nicolai Hojgaard", "odds": "80/1" }
+      ],
+      "source": "2a466096-b48a-4196-bd7e-8bd763b99ed9.JPG"
+    },
+    {
+      "name": "Noel Smyth",
+      "players": [
+        { "name": "Ludvig Aberg", "odds": "14/1" },
+        { "name": "Brooks Koepka", "odds": "40/1" },
+        { "name": "Max Homa", "odds": "80/1" }
+      ],
+      "source": "306764fc-2539-469e-9bd4-db294c5ceb39.JPG"
+    },
+    {
+      "name": "Pádraig Connery",
+      "players": [
+        { "name": "Rory McIlroy", "odds": "9/1" },
+        { "name": "Ludvig Aberg", "odds": "14/1" },
+        { "name": "Rasmus Hojgaard", "odds": "125/1" }
+      ],
+      "source": "4aa75e93-c0fe-4aa7-bf04-a73e4aa038ed.JPG"
+    },
+    {
+      "name": "Jonathan Flavin",
+      "players": [
+        { "name": "Scottie Scheffler", "odds": "5/1" },
+        { "name": "Ludvig Aberg", "odds": "14/1" },
+        { "name": "Kurt Kitayama", "odds": "150/1" }
+      ],
+      "source": "65c44196-2764-4e7b-ae19-e3c921eeee1d.JPG"
+    },
+    {
+      "name": "Jason Seward",
+      "players": [
+        { "name": "Justin Rose", "odds": "28/1" },
+        { "name": "Brooks Koepka", "odds": "40/1" },
+        { "name": "Cameron Smith", "odds": "66/1" }
+      ],
+      "source": "7798dc93-36a4-45d0-96ea-18cb026c0626.JPG"
+    },
+    {
+      "name": "Cormac Allen",
+      "players": [
+        { "name": "Tommy Fleetwood", "odds": "22/1" },
+        { "name": "Viktor Hovland", "odds": "33/1" },
+        { "name": "Max Homa", "odds": "80/1" }
+      ],
+      "source": "788a20fd-8d30-4219-a3d6-3b3de79e26c0.JPG"
+    },
+    {
+      "name": "Fintan Walsh",
+      "players": [
+        { "name": "Ludvig Aberg", "odds": "14/1" },
+        { "name": "Shane Lowry", "odds": "40/1" },
+        { "name": "Nicolai Hojgaard", "odds": "80/1" }
+      ],
+      "source": "7df46a67-8316-4087-8e08-5016acad31a7.JPG"
+    },
+    {
+      "name": "Barry Dunne",
+      "players": [
+        { "name": "Ludvig Aberg", "odds": "14/1" },
+        { "name": "Matt Fitzpatrick", "odds": "25/1" },
+        { "name": "Ryan Fox", "odds": "125/1" }
+      ],
+      "source": "87202094-0dc4-43d2-b030-a9db775d5344.JPG"
+    },
+    {
+      "name": "Sean Fleming",
+      "players": [
+        { "name": "Scottie Scheffler", "odds": "5/1" },
+        { "name": "Corey Conners", "odds": "50/1" },
+        { "name": "Max Homa", "odds": "80/1" }
+      ],
+      "source": "c5292395-1464-4fcf-a820-68c467068341.JPG"
+    }
+  ],
+  "unknown_entrants": [
+    {
+      "name": "Kieran Connery",
+      "players": [
+        { "name": "Scottie Scheffler", "odds": "5/1" },
+        { "name": "Min Woo Lee", "odds": "66/1" },
+        { "name": "Si Woo Kim", "odds": "66/1" }
+      ],
+      "total_odds": 137,
+      "source": "38159fa4-6a51-469e-94c2-91d8f3fdcf3d.JPG",
+      "note": "Screenshot is mid-form selection page, no submitter name shown"
+    },
+    {
+      "name": "Sean Tobin",
+      "players": [
+        { "name": "Tommy Fleetwood", "odds": "22/1" },
+        { "name": "Matt Fitzpatrick", "odds": "25/1" },
+        { "name": "Max Homa", "odds": "80/1" }
+      ],
+      "total_odds": 127,
+      "source": "95b94b61-8591-4ea8-8502-769cba35092d.JPG",
+      "note": "Screenshot is mid-form selection page, no submitter name shown"
+    }
+  ]
+}
