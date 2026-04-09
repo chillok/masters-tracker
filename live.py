@@ -366,13 +366,14 @@ def render_html(rows, out_path, updated_at, deltas):
     tbody = "\n".join(tbody_rows)
 
     updated_str = updated_at.astimezone(DUBLIN).strftime("%Y-%m-%d %H:%M %Z")
+    updated_iso = updated_at.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
     page = f"""<!doctype html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta http-equiv="refresh" content="900">
+<meta http-equiv="refresh" content="600">
 <title>The Guinness Storehouse — Live Standings</title>
 <style>
   :root {{
@@ -425,6 +426,11 @@ def render_html(rows, out_path, updated_at, deltas):
   .meta {{
     color: var(--muted);
     font-size: .85rem;
+  }}
+  .rel-time {{ font-variant-numeric: tabular-nums; }}
+  .rel-time.stale {{
+    color: var(--down);
+    font-weight: 600;
   }}
   .table-wrap {{
     overflow-x: auto;
@@ -511,7 +517,7 @@ def render_html(rows, out_path, updated_at, deltas):
   <div class="header">
     <img class="banner" src="banner.jpg" alt="">
     <h1>The Guinness Storehouse LIVE STANDINGS</h1>
-    <div class="meta">Updated {esc(updated_str)} · auto-refreshes every 15 min</div>
+    <div class="meta">Updated {esc(updated_str)} · <span class="rel-time" data-iso="{esc(updated_iso)}">just now</span> · refreshes every 10 min</div>
   </div>
   <div class="table-wrap">
     <table>
@@ -523,6 +529,29 @@ def render_html(rows, out_path, updated_at, deltas):
   </div>
   <footer>Lowest combined total wins. Scores relative to par. ⬆ / ⬇ marks rank change over the last ~30 min. Faded players have not yet teed off.</footer>
 </main>
+<script>
+(function () {{
+  var el = document.querySelector('.rel-time');
+  if (!el) return;
+  var ts = Date.parse(el.dataset.iso);
+  if (isNaN(ts)) return;
+  function render() {{
+    var mins = Math.max(0, Math.round((Date.now() - ts) / 60000));
+    var txt;
+    if (mins < 1) txt = 'just now';
+    else if (mins === 1) txt = '1 min ago';
+    else if (mins < 60) txt = mins + ' min ago';
+    else {{
+      var hrs = Math.floor(mins / 60);
+      txt = hrs + 'h ' + (mins % 60) + 'm ago';
+    }}
+    el.textContent = txt;
+    el.classList.toggle('stale', mins >= 20);
+  }}
+  render();
+  setInterval(render, 30000);
+}})();
+</script>
 </body>
 </html>
 """
