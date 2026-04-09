@@ -6,8 +6,8 @@ score (relative to par) wins.
 
 **Live leaderboard:** https://chillok.github.io/masters-tracker/
 
-The page auto-refreshes every 5 minutes and is regenerated server-side every
-15 minutes via GitHub Actions pulling from the BBC golf leaderboard.
+The page auto-refreshes every 15 minutes and is regenerated server-side on the
+same cadence via GitHub Actions pulling from the BBC golf leaderboard.
 
 ## Running locally
 

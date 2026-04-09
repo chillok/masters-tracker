@@ -7,8 +7,9 @@ Usage:
     python3 live.py --airdrop    # save image and open in Finder + AirDrop window
     python3 live.py --site       # write _site/index.html + _site/standings.png
 """
-import re, json, urllib.request, sys, subprocess, os, html as html_mod
+import re, json, urllib.request, sys, subprocess, os, shutil, html as html_mod
 from datetime import datetime, timezone
+from zoneinfo import ZoneInfo
 
 # entrants.json name → BBC leaderboard fullName
 BBC_ALIASES = {
@@ -22,6 +23,12 @@ BBC_ALIASES = {
 
 BBC_URL = "https://www.bbc.com/sport/golf/leaderboard"
 ENTRANTS_PATH = "entrants.json"
+SITE_URL = "https://chillok.github.io/masters-tracker"
+BANNER_SRC = "banner.jpg"
+HISTORY_FILENAME = "history.json"
+HISTORY_WINDOW_MIN = 60       # trim snapshots older than this
+DELTA_WINDOW_MIN = 25         # minimum age of reference snapshot for rank-delta arrow
+DUBLIN = ZoneInfo("Europe/Dublin")
 
 
 def fetch_leaderboard():
@@ -209,44 +216,157 @@ def render_png(rows, out_path):
     return out_path
 
 
-def render_html(rows, out_path, updated_at):
-    """Render the standings as a self-contained HTML page styled like the PNG."""
+def compute_ranks(rows):
+    """Competition ranks based on total: ties share a rank (1, 2, 2, 4)."""
+    ranks = {}
+    current_rank = 0
+    sentinel = object()
+    prev_total = sentinel
+    for i, (name, _scores, total) in enumerate(rows, 1):
+        if total != prev_total:
+            current_rank = i
+            prev_total = total
+        ranks[name] = current_rank
+    return ranks
+
+
+def _parse_iso(ts):
+    return datetime.fromisoformat(ts.replace("Z", "+00:00"))
+
+
+def load_history():
+    """Return previous snapshots list.
+
+    Prefers a local _site/history.json (dev), otherwise fetches the previously
+    deployed history.json from the live site so state survives across CI runs.
+    """
+    local = os.path.join("_site", HISTORY_FILENAME)
+    if os.path.exists(local):
+        try:
+            with open(local) as f:
+                return json.load(f).get("snapshots", [])
+        except (json.JSONDecodeError, OSError):
+            pass
+    try:
+        req = urllib.request.Request(
+            f"{SITE_URL}/{HISTORY_FILENAME}",
+            headers={"User-Agent": "Mozilla/5.0"},
+        )
+        with urllib.request.urlopen(req, timeout=10) as r:
+            return json.load(r).get("snapshots", [])
+    except Exception:
+        return []
+
+
+def compute_deltas(history, current_ranks, now):
+    """Return {entrant_name: 'up'|'down'|None} comparing to a ~30-min-old snapshot."""
+    candidates = []
+    for snap in history:
+        try:
+            age_min = (now - _parse_iso(snap["ts"])).total_seconds() / 60
+        except (KeyError, ValueError):
+            continue
+        if age_min >= DELTA_WINDOW_MIN:
+            candidates.append((age_min, snap))
+    if not candidates:
+        return {name: None for name in current_ranks}
+    # Newest snapshot that is still old enough
+    _, ref = min(candidates, key=lambda c: c[0])
+    prev_ranks = ref.get("ranks", {})
+    deltas = {}
+    for name, rank in current_ranks.items():
+        prev = prev_ranks.get(name)
+        if prev is None or prev == rank:
+            deltas[name] = None
+        elif prev > rank:
+            deltas[name] = "up"
+        else:
+            deltas[name] = "down"
+    return deltas
+
+
+def save_history(history, current_ranks, now, out_path):
+    """Append the current snapshot, trim old ones, write to out_path."""
+    cutoff = now.timestamp() - HISTORY_WINDOW_MIN * 60
+    trimmed = []
+    for snap in history:
+        try:
+            if _parse_iso(snap["ts"]).timestamp() >= cutoff:
+                trimmed.append(snap)
+        except (KeyError, ValueError):
+            continue
+    trimmed.append({
+        "ts": now.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "ranks": current_ranks,
+    })
+    os.makedirs(os.path.dirname(out_path) or ".", exist_ok=True)
+    with open(out_path, "w") as f:
+        json.dump({"snapshots": trimmed}, f, indent=2)
+
+
+def is_pending(thru):
+    """True if the player hasn't teed off yet (tee time or unknown)."""
+    t = (thru or "").strip()
+    return ":" in t or t in ("-", "")
+
+
+def render_html(rows, out_path, updated_at, deltas):
+    """Render the standings as a self-contained HTML page."""
     esc = html_mod.escape
 
-    header_cells = ["#", "Entrant", "Total", "Player 1", "Player 2", "Player 3"]
+    header_cells = ["#", "Entrant", "Total", "Players"]
     thead = "".join(f"<th>{esc(h)}</th>" for h in header_cells)
 
+    ranks = compute_ranks(rows)
     tbody_rows = []
-    for i, (name, scores, total) in enumerate(rows, 1):
-        picks = [fmt_pick(p, raw, thru) for p, _, thru, raw in scores]
-        cls = ' class="leader"' if i == 1 else ""
+    for name, scores, total in rows:
+        rank = ranks[name]
+        cls = ' class="leader"' if rank == 1 else ""
+
+        delta = deltas.get(name)
+        if delta == "up":
+            arrow = ' <span class="arrow up">⬆</span>'
+        elif delta == "down":
+            arrow = ' <span class="arrow down">⬇</span>'
+        else:
+            arrow = ""
+
+        player_lines = []
+        for p, _score, thru, raw in scores:
+            pick_text = fmt_pick(p, raw, thru)
+            pcls = "player pending" if is_pending(thru) else "player"
+            player_lines.append(f'<div class="{pcls}">{esc(pick_text)}</div>')
+        players_html = "".join(player_lines)
+
         cells = [
-            f"<td class=\"num\">{i}</td>",
-            f"<td>{esc(name)}</td>",
-            f"<td class=\"num total\">{esc(fmt_total(total))}</td>",
-            f"<td>{esc(picks[0])}</td>",
-            f"<td>{esc(picks[1])}</td>",
-            f"<td>{esc(picks[2])}</td>",
+            f'<td class="num">{rank}{arrow}</td>',
+            f'<td class="entrant">{esc(name)}</td>',
+            f'<td class="num total">{esc(fmt_total(total))}</td>',
+            f'<td class="players">{players_html}</td>',
         ]
         tbody_rows.append(f"<tr{cls}>{''.join(cells)}</tr>")
     tbody = "\n".join(tbody_rows)
 
-    updated_str = updated_at.strftime("%Y-%m-%d %H:%M UTC")
+    updated_str = updated_at.astimezone(DUBLIN).strftime("%Y-%m-%d %H:%M %Z")
 
     page = f"""<!doctype html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta http-equiv="refresh" content="300">
-<title>Masters Tracker — Live Standings</title>
+<meta http-equiv="refresh" content="900">
+<title>The Guinness Storehouse — Live Standings</title>
 <style>
   :root {{
-    --green: #006747;
-    --cream: #f5f1e8;
-    --alt:   #eae4d3;
-    --border:#c8c0a8;
-    --dark:  #1a1a1a;
+    --green:  #006747;
+    --cream:  #f5f1e8;
+    --alt:    #eae4d3;
+    --border: #c8c0a8;
+    --dark:   #1a1a1a;
+    --muted:  #6b6550;
+    --faded:  #a8a08a;
+    --up:     #2e7d32;
+    --down:   #c62828;
   }}
   * {{ box-sizing: border-box; }}
   body {{
@@ -258,21 +378,36 @@ def render_html(rows, out_path, updated_at):
     font-size: 15px;
   }}
   main {{
-    max-width: 1400px;
+    max-width: 1100px;
     margin: 0 auto;
+  }}
+  .header {{
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    gap: .75rem;
+    margin-bottom: 1.5rem;
+  }}
+  .banner {{
+    width: 180px;
+    height: 180px;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 4px solid var(--green);
+    box-shadow: 0 2px 6px rgba(0,0,0,.15);
   }}
   h1 {{
     color: var(--green);
     margin: 0 0 .25rem;
-    font-size: 1.6rem;
+    font-size: 1.4rem;
     letter-spacing: .02em;
+    line-height: 1.2;
   }}
   .meta {{
-    color: #6b6550;
+    color: var(--muted);
     font-size: .85rem;
-    margin-bottom: 1.25rem;
   }}
-  .meta a {{ color: var(--green); }}
   .table-wrap {{
     overflow-x: auto;
     border: 1px solid var(--border);
@@ -283,7 +418,6 @@ def render_html(rows, out_path, updated_at):
   table {{
     border-collapse: collapse;
     width: 100%;
-    white-space: nowrap;
   }}
   thead th {{
     background: var(--green);
@@ -292,28 +426,48 @@ def render_html(rows, out_path, updated_at):
     padding: .7rem .9rem;
     font-weight: 600;
     letter-spacing: .02em;
+    white-space: nowrap;
   }}
   tbody td {{
-    padding: .55rem .9rem;
+    padding: .6rem .9rem;
     border-top: 1px solid var(--border);
+    vertical-align: top;
   }}
   tbody tr:nth-child(even) td {{ background: var(--alt); }}
-  tbody tr.leader td {{ font-weight: 700; color: var(--green); }}
-  td.num {{ text-align: right; }}
+  tbody tr.leader td.num,
+  tbody tr.leader td.entrant,
+  tbody tr.leader td.total {{ font-weight: 700; color: var(--green); }}
+  td.num {{ text-align: right; white-space: nowrap; }}
   td.total {{ font-weight: 600; }}
+  td.players .player {{
+    display: block;
+    line-height: 1.45;
+    white-space: nowrap;
+  }}
+  td.players .player.pending {{ color: var(--faded); }}
+  .arrow {{ font-size: .9em; }}
+  .arrow.up   {{ color: var(--up); }}
+  .arrow.down {{ color: var(--down); }}
   footer {{
     margin-top: 1.5rem;
-    font-size: .8rem;
-    color: #6b6550;
+    font-size: .78rem;
+    color: var(--muted);
+  }}
+  @media (max-width: 640px) {{
+    body {{ padding: 1rem .5rem; font-size: 14px; }}
+    h1 {{ font-size: 1.1rem; }}
+    .banner {{ width: 140px; height: 140px; border-width: 3px; }}
+    thead th, tbody td {{ padding: .5rem .55rem; }}
+    td.players .player {{ white-space: normal; }}
   }}
 </style>
 </head>
 <body>
 <main>
-  <h1>LIVE STANDINGS — The Masters</h1>
-  <div class="meta">
-    Updated {esc(updated_str)} · auto-refreshes every 5 min ·
-    source: <a href="https://www.bbc.com/sport/golf/leaderboard">BBC leaderboard</a>
+  <div class="header">
+    <img class="banner" src="banner.jpg" alt="">
+    <h1>The Guinness Storehouse LIVE STANDINGS</h1>
+    <div class="meta">Updated {esc(updated_str)} · auto-refreshes every 15 min</div>
   </div>
   <div class="table-wrap">
     <table>
@@ -323,7 +477,7 @@ def render_html(rows, out_path, updated_at):
       </tbody>
     </table>
   </div>
-  <footer>Lowest combined total wins. Scores relative to par.</footer>
+  <footer>Lowest combined total wins. Scores relative to par. ⬆ / ⬇ marks rank change over the last ~30 min. Faded players have not yet teed off.</footer>
 </main>
 </body>
 </html>
@@ -398,9 +552,22 @@ def main():
 
     if build_site:
         os.makedirs("_site", exist_ok=True)
+        now = datetime.now(timezone.utc)
+
+        ranks = compute_ranks(rows)
+        history = load_history()
+        deltas = compute_deltas(history, ranks, now)
+
         render_png(rows, "_site/standings.png")
-        render_html(rows, "_site/index.html", datetime.now(timezone.utc))
-        print("\nWrote _site/index.html and _site/standings.png")
+        render_html(rows, "_site/index.html", now, deltas)
+        save_history(history, ranks, now, os.path.join("_site", HISTORY_FILENAME))
+
+        if os.path.exists(BANNER_SRC):
+            shutil.copy(BANNER_SRC, os.path.join("_site", BANNER_SRC))
+        else:
+            print(f"Warning: {BANNER_SRC} not found; site banner will be missing")
+
+        print("\nWrote _site/index.html, _site/standings.png, _site/history.json, _site/banner.jpg")
 
 
 if __name__ == "__main__":
