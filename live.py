@@ -320,7 +320,7 @@ def save_history(history, current_ranks, now, out_path, current_scores=None):
         json.dump({"snapshots": trimmed}, f, indent=2)
 
 
-COMMENTARY_RESET = True   # flip to False after first deploy
+COMMENTARY_RESET = False
 
 def load_commentary():
     """Load previous commentary entries from _site or deployed site."""
