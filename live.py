@@ -689,7 +689,7 @@ def generate_ai_commentary(rows, ranks, history, predictions,
         "VERDICT: PASS or VERDICT: FAIL with a brief reason."
     )
 
-    MAX_ATTEMPTS = 3
+    MAX_ATTEMPTS = 5
     text = None
     for attempt in range(MAX_ATTEMPTS):
         if attempt == 0:
@@ -1316,20 +1316,22 @@ def main():
         commentary = load_commentary()
         ts = now.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
-        # Try AI commentary for live changes, fall back to templates
+        # Try AI commentary for live changes
         entry = generate_ai_commentary(
             rows, ranks, history, predictions, commentary,
-        ) or generate_commentary(rows, ranks, history, now)
+        )
         if entry:
             # Real change detected — prepend new entry
             commentary = [{"ts": ts, "text": entry}] + commentary
             commentary = commentary[:COMMENTARY_MAX]
-        elif not entry:
-            # No changes — regenerate the summary (keeps it fresh between rounds)
+        else:
+            # No changes or AI failed — try regenerating the summary
             fresh = generate_ai_commentary(
                 rows, ranks, history, predictions, commentary, is_first=True,
-            ) or generate_day1_summary(rows, ranks)
-            commentary = [{"ts": ts, "text": fresh}] + commentary[1:]
+            )
+            if fresh:
+                commentary = [{"ts": ts, "text": fresh}] + commentary[1:]
+            # If AI failed all attempts, keep existing commentary unchanged
         save_commentary(commentary, os.path.join("_site", COMMENTARY_FILENAME))
 
         render_png(rows, "_site/standings.png")
