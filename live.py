@@ -511,9 +511,12 @@ def _build_standings_prompt(rows, ranks, prev_ranks, prev_scores, predictions,
     current_scores = {name: total for name, _, total in rows}
     lines = []
     for name, scores, total in rows:
-        golfers = ", ".join(
-            f"{p} ({fmt_total(s)})" for p, s, _, _ in scores if s is not None
-        )
+        golfer_parts = []
+        for p, s, thru, _ in scores:
+            if s is not None:
+                thru_str = f" thru {thru}" if thru and not str(thru).startswith("F") else ""
+                golfer_parts.append(f"{p} ({fmt_total(s)}{thru_str})")
+        golfers = ", ".join(golfer_parts)
         rank = ranks[name]
         extras = []
         pr = prev_ranks.get(name)
@@ -635,10 +638,11 @@ def generate_ai_commentary(rows, ranks, history, predictions,
         )
     else:
         task = (
-            "This is a live update. Focus ONLY on what changed since "
-            "the last update \u2014 new leader, big movers, score swings. "
-            "Do NOT rehash the overall standings or repeat information "
-            "from previous commentary. Only mention new developments. "
+            "This is a live update. Focus on what changed since the "
+            "last update \u2014 key players dropping or gaining shots, "
+            "score swings, position changes. Mention specific golfers "
+            "and their score moves where relevant (e.g. 'Scheffler "
+            "drops to +1'). Do NOT just repeat the overall standings. "
             "Exception: if there have been many changes, you may give "
             "a brief overview of the current state."
             "\n\nWrite 1\u20132 sentences, max 40 words."
