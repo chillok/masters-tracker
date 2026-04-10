@@ -1152,7 +1152,7 @@ def render_html(rows, out_path, updated_at, deltas, predictions=None, commentary
     background: var(--cream);
     color: var(--dark);
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-    font-size: 15px;
+    font-size: 16px;
   }}
   main {{
     max-width: 1100px;
