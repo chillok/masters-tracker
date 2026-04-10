@@ -542,6 +542,31 @@ def _build_standings_prompt(rows, ranks, prev_ranks, prev_scores, predictions,
     return standings, pred_line, prev_lines
 
 
+def _call_haiku(api_key, prompt, max_tokens=120):
+    """Call Claude Haiku and return the text response, or None on failure."""
+    body = json.dumps({
+        "model": "claude-haiku-4-5-20251001",
+        "max_tokens": max_tokens,
+        "messages": [{"role": "user", "content": prompt}],
+    })
+    req = urllib.request.Request(
+        "https://api.anthropic.com/v1/messages",
+        data=body.encode(),
+        headers={
+            "Content-Type": "application/json",
+            "x-api-key": api_key,
+            "anthropic-version": "2023-06-01",
+        },
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=15) as r:
+            resp = json.load(r)
+        return resp["content"][0]["text"].strip().strip('"')
+    except Exception as e:
+        print(f"Haiku API call failed ({e})")
+        return None
+
+
 def generate_ai_commentary(rows, ranks, history, predictions,
                            existing_commentary, is_first=False):
     """Use Claude to generate natural commentary. Returns str or None."""
@@ -598,34 +623,50 @@ def generate_ai_commentary(rows, ranks, history, predictions,
         "Tone: knowledgeable friend in the group chat \u2014 "
         "lighthearted, a bit of dry humour, but not cheesy. "
         "No exclamation marks. No hashtags or emojis. "
-        "Be specific \u2014 use real names and numbers."
+        "Be specific \u2014 use real names and numbers.\n\n"
+        "Subtle running jokes to weave in ONLY where they fit naturally "
+        "(don't force them, don't use all of them in one update):\n"
+        "- Gentle digs at Noel Smyth (underperforming, questionable picks, etc.)\n"
+        "- Light ribbing of P\u00e1draig Connery (unlucky, cursed, etc.)\n"
+        "- Quietly optimistic spin on Barry Dunne even when he's clearly struggling\n"
+        "These should be understated and wry, not mean-spirited. "
+        "If there's nothing natural to say about them, just skip it."
+    )
+
+    accuracy = (
+        "IMPORTANT: Only state facts that are directly supported by the "
+        "data above. Do not invent scores, rankings, or claims. "
+        "Double-check every number you cite against the standings."
     )
 
     prompt = (f"{preamble}\n\nCurrent standings:\n{standings}{pred_line}"
-              f"\n\n{task}\n\n{tone}{prev_lines}")
+              f"\n\n{task}\n\n{tone}\n\n{accuracy}{prev_lines}")
 
-    body = json.dumps({
-        "model": "claude-haiku-4-5-20251001",
-        "max_tokens": 120,
-        "messages": [{"role": "user", "content": prompt}],
-    })
-    req = urllib.request.Request(
-        "https://api.anthropic.com/v1/messages",
-        data=body.encode(),
-        headers={
-            "Content-Type": "application/json",
-            "x-api-key": api_key,
-            "anthropic-version": "2023-06-01",
-        },
-    )
-    try:
-        with urllib.request.urlopen(req, timeout=15) as r:
-            resp = json.load(r)
-        text = resp["content"][0]["text"].strip().strip('"')
-        return text
-    except Exception as e:
-        print(f"AI commentary failed ({e}), falling back to templates")
+    text = _call_haiku(api_key, prompt, max_tokens=120)
+    if not text:
         return None
+
+    # Fact-check the generated commentary against the raw data
+    verify_prompt = (
+        f"You are a fact-checker. Here is the data:\n\n{standings}{pred_line}"
+        f"\n\nHere is a commentary written about this data:\n\"{text}\"\n\n"
+        "Check ONLY for hard factual errors:\n"
+        "- Wrong scores (e.g. saying a player is -3 when they are +2)\n"
+        "- Wrong rankings or positions\n"
+        "- Wrong player-to-entrant assignments\n"
+        "- Misuse of golf terminology (e.g. calling a bad score an 'albatross')\n\n"
+        "Do NOT flag figurative language, hyperbole, humour, or rhetorical "
+        "phrases like 'carrying single-handedly' \u2014 these are fine.\n\n"
+        "Reply with ONLY the word PASS if there are no hard factual errors, "
+        "or FAIL followed by a brief explanation."
+    )
+    verdict = _call_haiku(api_key, verify_prompt, max_tokens=80)
+    if not verdict or not verdict.upper().startswith("PASS"):
+        print(f"AI commentary failed fact-check ({verdict}), "
+              "falling back to templates")
+        return None
+
+    return text
 
 
 def is_pending(thru):
@@ -1200,20 +1241,21 @@ def main():
         current_scores = {name: total for name, _, total in rows}
         commentary = load_commentary()
         ts = now.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-        if not commentary:
-            # Seed with a Day 1 summary — try AI, fall back to template
-            entry = generate_ai_commentary(
-                rows, ranks, history, predictions, [], is_first=True,
+
+        # Try AI commentary for live changes, fall back to templates
+        entry = generate_ai_commentary(
+            rows, ranks, history, predictions, commentary,
+        ) or generate_commentary(rows, ranks, history, now)
+        if entry:
+            # Real change detected — prepend new entry
+            commentary = [{"ts": ts, "text": entry}] + commentary
+            commentary = commentary[:COMMENTARY_MAX]
+        elif not entry:
+            # No changes — regenerate the summary (keeps it fresh between rounds)
+            fresh = generate_ai_commentary(
+                rows, ranks, history, predictions, commentary, is_first=True,
             ) or generate_day1_summary(rows, ranks)
-            commentary = [{"ts": ts, "text": entry}]
-        else:
-            # Try AI commentary, fall back to template-based
-            entry = generate_ai_commentary(
-                rows, ranks, history, predictions, commentary,
-            ) or generate_commentary(rows, ranks, history, now)
-            if entry:
-                commentary = [{"ts": ts, "text": entry}] + commentary
-                commentary = commentary[:COMMENTARY_MAX]
+            commentary = [{"ts": ts, "text": fresh}] + commentary[1:]
         save_commentary(commentary, os.path.join("_site", COMMENTARY_FILENAME))
 
         render_png(rows, "_site/standings.png")
