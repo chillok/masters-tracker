@@ -1088,7 +1088,7 @@ def render_html(rows, out_path, updated_at, deltas, predictions=None, commentary
     comm_section = ""
     if commentary:
         comm_entries = []
-        for entry in commentary[:5]:
+        for entry in commentary[:COMMENTARY_MAX]:
             ts_raw = entry.get("ts", "")
             try:
                 dt = _parse_iso(ts_raw).astimezone(DUBLIN)
@@ -1098,16 +1098,16 @@ def render_html(rows, out_path, updated_at, deltas, predictions=None, commentary
             text = entry.get("text", "")
             if entry.get("type") == "michael":
                 comm_entries.append(
-                    f'<div class="comm-entry michael-view">'
-                    f'<div class="michael-header">'
+                    f'<div class="comm-entry michael-entry">'
+                    f'<span class="comm-time">{esc(time_str)}</span>'
+                    f'<div class="comm-text">'
+                    f'<div class="michael-banner">'
                     f'<img src="{MICHAEL_RYAN_IMG}" class="michael-img" '
                     f'alt="Michael Ryan">'
-                    f'<div class="michael-title">'
-                    f'<strong>Michael\'s View</strong>'
-                    f'<span class="comm-time">{esc(time_str)}</span>'
-                    f'</div></div>'
-                    f'<span class="comm-text michael-text">{esc(text)}</span>'
+                    f'<span class="michael-label">Michael\'s View</span>'
                     f'</div>'
+                    f'<span class="michael-text">{esc(text)}</span>'
+                    f'</div></div>'
                 )
             else:
                 comm_entries.append(
@@ -1115,7 +1115,7 @@ def render_html(rows, out_path, updated_at, deltas, predictions=None, commentary
                     f'<span class="comm-time">{esc(time_str)}</span>'
                     f'<span class="comm-text">{esc(text)}</span>'
                     f'</div>'
-            )
+                )
         comm_html = "\n".join(comm_entries)
         comm_section = (
             '  <div class="commentary">\n'
@@ -1363,43 +1363,32 @@ def render_html(rows, out_path, updated_at, deltas, predictions=None, commentary
     font-size: .75rem;
     padding-top: .05rem;
   }}
-  .michael-view {{
-    display: block;
-    background: #f0f4e8;
-    border: 1px solid #c5d4a0;
-    border-left: 4px solid #2e5f2e;
-    border-radius: 6px;
-    padding: .8rem;
-    margin: .4rem 0;
-    font-weight: normal;
+  .michael-entry {{
   }}
-  .michael-header {{
+  .michael-banner {{
     display: flex;
     align-items: center;
-    gap: .6rem;
-    margin-bottom: .5rem;
+    gap: .5rem;
+    margin-bottom: .4rem;
   }}
   .michael-img {{
     width: 80px;
     height: 80px;
     border-radius: 50%;
     object-fit: cover;
-    border: 3px solid #2e5f2e;
+    border: 3px solid #1a3f7a;
   }}
-  .michael-title {{
-    display: flex;
-    flex-direction: column;
-    font-size: .85rem;
+  .michael-label {{
+    font-family: 'Brush Script MT', 'Segoe Script', 'Apple Chancery', cursive;
+    font-size: 1.5rem;
+    font-weight: 400;
+    color: #1a3f7a;
+    letter-spacing: .02em;
   }}
-  .michael-title strong {{
-    color: #2e5f2e;
-    font-size: .95rem;
-  }}
-  .michael-view .comm-text {{
+  .michael-text {{
     display: block;
     white-space: pre-line;
-    color: #333 !important;
-    font-weight: normal;
+    color: var(--dark);
   }}
   @media (max-width: 640px) {{
     body {{ padding: 1rem .5rem; font-size: 14px; }}
