@@ -510,7 +510,7 @@ def generate_commentary(rows, ranks, history, now):
 
 
 def _build_standings_prompt(rows, ranks, prev_ranks, prev_scores, predictions,
-                            existing_commentary):
+                            existing_commentary, model=None):
     """Build the structured data block for the AI commentary prompt."""
     current_scores = {name: total for name, _, total in rows}
     lines = []
@@ -521,12 +521,44 @@ def _build_standings_prompt(rows, ranks, prev_ranks, prev_scores, predictions,
                 # Only show thru if it's a hole number (not a tee time)
                 thru_s = str(thru) if thru else ""
                 if thru_s.isdigit():
-                    thru_str = f", thru {thru_s}"
+                    holes_played = int(thru_s)
+                    thru_str = f", thru {thru_s}, {18 - holes_played} holes left today"
                 elif thru_s.startswith("F"):
-                    thru_str = ", finished"
+                    thru_str = ", finished for the day"
+                elif ":" in thru_s:
+                    thru_str = f", hasn't teed off yet (tee time {thru_s})"
                 else:
                     thru_str = ""
-                golfer_parts.append(f"{p} ({fmt_total(s)}{thru_str})")
+                # Add model expectation vs actual
+                perf_str = ""
+                if model and p in model:
+                    m = model[p]
+                    # Model rank 1 = best, 91 = worst
+                    if m["rank"] <= 15:
+                        expected = "elite (top 15)"
+                    elif m["rank"] <= 35:
+                        expected = "strong (top 35)"
+                    elif m["rank"] <= 60:
+                        expected = "mid-tier"
+                    else:
+                        expected = "longshot"
+                    if s <= -3:
+                        actual = "excellent"
+                    elif s <= -1:
+                        actual = "solid"
+                    elif s == 0:
+                        actual = "steady"
+                    elif s <= 2:
+                        actual = "struggling"
+                    else:
+                        actual = "poor"
+                    if (expected in ("elite (top 15)", "strong (top 35)")
+                            and actual in ("struggling", "poor")):
+                        perf_str = f", UNDERPERFORMING (ranked {expected}, playing {actual})"
+                    elif (expected in ("mid-tier", "longshot")
+                          and actual in ("excellent", "solid")):
+                        perf_str = f", OVERPERFORMING (ranked {expected}, playing {actual})"
+                golfer_parts.append(f"{p} ({fmt_total(s)}{thru_str}{perf_str})")
         golfers = ", ".join(golfer_parts)
         rank = ranks[name]
         extras = []
@@ -819,7 +851,7 @@ def generate_mullane_view(rows, ranks, predictions, michael_text=None,
 
 def generate_ai_commentary(rows, ranks, history, predictions,
                            existing_commentary, is_first=False,
-                           tournament_progress=None):
+                           tournament_progress=None, model=None):
     """Use Claude to generate natural commentary. Returns str or None."""
     api_key = os.environ.get("ANTHROPIC_API_KEY")
     if not api_key:
@@ -864,7 +896,7 @@ def generate_ai_commentary(rows, ranks, history, predictions,
 
     standings, pred_line, prev_lines = _build_standings_prompt(
         rows, ranks, prev_ranks, prev_scores, predictions,
-        existing_commentary,
+        existing_commentary, model=model,
     )
 
     preamble = (
@@ -1714,7 +1746,7 @@ def main():
         # Try AI commentary for live changes (only add if something changed)
         entry = generate_ai_commentary(
             rows, ranks, history, predictions, regular,
-            tournament_progress=tournament_progress,
+            tournament_progress=tournament_progress, model=model,
         )
         if entry:
             regular = [{"ts": ts, "text": entry}] + regular
@@ -1723,7 +1755,7 @@ def main():
             # Only generate a summary if we have no commentary at all
             fresh = generate_ai_commentary(
                 rows, ranks, history, predictions, regular, is_first=True,
-                tournament_progress=tournament_progress,
+                tournament_progress=tournament_progress, model=model,
             )
             if fresh:
                 regular = [{"ts": ts, "text": fresh}]
