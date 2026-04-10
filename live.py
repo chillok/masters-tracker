@@ -1608,8 +1608,11 @@ def render_html(rows, out_path, updated_at, deltas, predictions=None, commentary
   .guest-img {{
     width: 80px;
     height: 80px;
+    min-width: 80px;
+    min-height: 80px;
     border-radius: 50%;
     object-fit: cover;
+    flex-shrink: 0;
   }}
   .guest-name-block {{
     display: flex;
