@@ -712,6 +712,13 @@ def generate_michael_view(rows, ranks, predictions, prev_michael=None,
         "Short sentences. Doesn't over-explain.\n"
         "- You don't really know golf terminology. You call it 'de golf' "
         "and talk about players like they're on a county panel.\n"
+        "- Occasionally misspell a golfer's name in a believable way "
+        "(e.g. 'Sheffler', 'Kittayama', 'McElroy') — not every name, "
+        "just one now and then, like a man who heard it on the radio.\n"
+        "- Sometimes get golf terms confidently wrong or mix them up "
+        "(e.g. 'he birdied de par' or 'a fierce bogey on de back seven' "
+        "or calling the green 'de pitch'). Keep it deadpan — never "
+        "acknowledge you might be wrong.\n"
     )
 
     if prev_michael and changes_block:
