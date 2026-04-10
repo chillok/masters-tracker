@@ -1151,8 +1151,8 @@ def render_html(rows, out_path, updated_at, deltas, predictions=None, commentary
     padding: 2rem 1rem;
     background: var(--cream);
     color: var(--dark);
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-    font-size: 16px;
+    font-family: Georgia, "Times New Roman", Times, serif;
+    font-size: 20px;
   }}
   main {{
     max-width: 1100px;
@@ -1348,8 +1348,8 @@ def render_html(rows, out_path, updated_at, deltas, predictions=None, commentary
     display: flex;
     gap: .7rem;
     padding: .4rem 0;
-    font-size: .82rem;
-    line-height: 1.45;
+    font-size: 1rem;
+    line-height: 1.5;
   }}
   .comm-entry + .comm-entry {{
     border-top: 1px solid var(--border);
@@ -1380,19 +1380,17 @@ def render_html(rows, out_path, updated_at, deltas, predictions=None, commentary
     height: 80px;
     border-radius: 50%;
     object-fit: cover;
-    border: 3px solid #1a3f7a;
   }}
   .michael-name-block {{
     display: flex;
     flex-direction: column;
   }}
   .michael-label {{
-    font-size: 1.1rem;
-    font-weight: 700;
-    font-style: italic;
+    font-family: 'Brush Script MT', 'Segoe Script', 'Apple Chancery', cursive;
+    font-size: 2.2rem;
+    font-weight: 400;
     color: #1a3f7a;
-    letter-spacing: .06em;
-    text-transform: uppercase;
+    line-height: 1.1;
   }}
   .michael-subtitle {{
     font-size: .7rem;
