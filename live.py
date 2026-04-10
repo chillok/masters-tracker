@@ -620,6 +620,126 @@ def _call_haiku(api_key, prompt, max_tokens=120):
         return None
 
 
+MICHAEL_RYAN_IMG = "michael_ryan.jpg"
+
+
+MICHAEL_FREQUENCY = 10  # generate roughly 1 in every N builds
+
+
+def generate_michael_view(rows, ranks, predictions, prev_michael=None,
+                          prev_scores=None, api_key=None):
+    """Generate a 'Michael's View' guest commentary in the style of
+    Michael Ryan from the Nire Valley — deep Comeragh mountains accent,
+    GAA manager who relates everything back to hurling and football.
+
+    If prev_michael/prev_scores are provided, the prompt focuses on
+    the most significant changes since Michael last spoke.
+    """
+    if not api_key:
+        api_key = os.environ.get("ANTHROPIC_API_KEY")
+    if not api_key:
+        return None
+
+    standings_lines = []
+    for name, scores, total in rows:
+        golfers = ", ".join(f"{p} ({fmt_total(s)})" for p, s, _, _ in scores
+                            if s is not None)
+        standings_lines.append(
+            f"  {name} {fmt_total(total)} — picks: {golfers}")
+    standings = "\n".join(standings_lines)
+
+    # Build a changes block if we have previous data
+    changes_block = ""
+    if prev_scores:
+        current_scores = {name: total for name, _, total in rows}
+        prev_ranks_map = {}
+        # Derive previous ranks from prev_scores (sorted by score)
+        sorted_prev = sorted(prev_scores.items(), key=lambda x: x[1])
+        r = 0
+        last_sc = None
+        for i, (n, sc) in enumerate(sorted_prev, 1):
+            if sc != last_sc:
+                r = i
+                last_sc = sc
+            prev_ranks_map[n] = r
+        changes = []
+        for name, scores, total in rows:
+            ps = prev_scores.get(name)
+            if ps is not None and ps != total:
+                d = total - ps
+                direction = "improved" if d < 0 else "dropped"
+                pr = prev_ranks_map.get(name)
+                cr = ranks[name]
+                rank_move = ""
+                if pr and pr != cr:
+                    rank_move = f", was {_ordinal(pr)} now {_ordinal(cr)}"
+                changes.append(
+                    f"  {name}: {fmt_total(ps)} -> {fmt_total(total)} "
+                    f"({direction} {abs(d)}){rank_move}")
+        if changes:
+            changes_block = (
+                "\n\nKEY CHANGES since your last update:\n"
+                + "\n".join(changes)
+                + "\n\nFocus on these changes — what moved, who's rising, "
+                "who's falling apart. Don't rehash the full standings."
+            )
+
+    character = (
+        "You are Michael Ryan from the Nire Valley in the Comeragh Mountains, "
+        "County Waterford, Ireland. You managed the Waterford senior ladies "
+        "football team for 20 years and the Waterford hurlers. You have an "
+        "extremely thick rural Waterford/Comeragh accent.\n\n"
+        "Your speech patterns (DEEP RURAL, not Waterford city):\n"
+        "- 'de' instead of 'the', 't'ing' for 'thing'\n"
+        "- 'sure look', 'now in fairness', 'I'll be honest wit ye', "
+        "'I'll tell ye'\n"
+        "- 'fierce' as an intensifier\n"
+        "- 'nuttin' for 'nothing', 'wit' for 'with', 'dat' for 'that'\n"
+        "- 'dere' for 'there', 'dem' for 'them', 'tis' for 'it is'\n"
+        "- DO NOT use 'boy' or 'biy' — that's Waterford CITY, not country\n"
+        "- Slow, deliberate, measured delivery. Lots of pauses. "
+        "Sentences trail off with 'like' or 'so'.\n"
+        "- 'ah sure' to start thoughts, 'do you know' as a filler\n"
+        "- You constantly relate golf to GAA — comparing picks to "
+        "team selection, golfers to hurlers/footballers, scores to "
+        "match results\n"
+        "- Reference Waterford GAA landmarks: Fraher Field, Walsh Park, "
+        "Colligan, the Nire, the Comeraghs\n"
+        "- Raw, country, no-nonsense. Sounds like a man leaning on a "
+        "gate in the Comeraghs giving you his assessment.\n"
+        "- VERY dry and drole. Understated. Deadpan. Doesn't labour "
+        "the joke — just states things plainly and lets the humour land. "
+        "Short sentences. Doesn't over-explain.\n"
+        "- You don't really know golf terminology. You call it 'de golf' "
+        "and talk about players like they're on a county panel.\n"
+    )
+
+    if prev_michael and changes_block:
+        task = (
+            f"\nYour previous commentary was:\n\"{prev_michael}\"\n"
+            f"\nCurrent standings:\n{standings}"
+            f"{changes_block}\n\n"
+            "Give your updated take. React to the biggest changes — "
+            "who's moved, who's collapsed, any new storyline. "
+            "Don't repeat your previous points. "
+            "2-3 SHORT paragraphs, max 100 words total. Tight. No waffle. "
+            "Do NOT use quotation marks around the whole thing."
+        )
+    else:
+        task = (
+            f"\nHere are the current standings in a Masters golf sweepstake:\n"
+            f"{standings}\n\n"
+            "Give your analysis as Michael Ryan. Hit the key points only — "
+            "the leader, the biggest waste of potential, and one dig. "
+            "2-3 SHORT paragraphs, max 100 words total. Tight. No waffle. "
+            "Do NOT use quotation marks around the whole thing."
+        )
+
+    prompt = character + task
+    text = _call_haiku(api_key, prompt, max_tokens=200)
+    return text
+
+
 def generate_ai_commentary(rows, ranks, history, predictions,
                            existing_commentary, is_first=False):
     """Use Claude to generate natural commentary. Returns str or None."""
@@ -969,11 +1089,25 @@ def render_html(rows, out_path, updated_at, deltas, predictions=None, commentary
             except (ValueError, AttributeError):
                 time_str = ts_raw
             text = entry.get("text", "")
-            comm_entries.append(
-                f'<div class="comm-entry">'
-                f'<span class="comm-time">{esc(time_str)}</span>'
-                f'<span class="comm-text">{esc(text)}</span>'
-                f'</div>'
+            if entry.get("type") == "michael":
+                comm_entries.append(
+                    f'<div class="comm-entry michael-view">'
+                    f'<div class="michael-header">'
+                    f'<img src="{MICHAEL_RYAN_IMG}" class="michael-img" '
+                    f'alt="Michael Ryan">'
+                    f'<div class="michael-title">'
+                    f'<strong>Michael\'s View</strong>'
+                    f'<span class="comm-time">{esc(time_str)}</span>'
+                    f'</div></div>'
+                    f'<span class="comm-text michael-text">{esc(text)}</span>'
+                    f'</div>'
+                )
+            else:
+                comm_entries.append(
+                    f'<div class="comm-entry">'
+                    f'<span class="comm-time">{esc(time_str)}</span>'
+                    f'<span class="comm-text">{esc(text)}</span>'
+                    f'</div>'
             )
         comm_html = "\n".join(comm_entries)
         comm_section = (
@@ -1222,6 +1356,44 @@ def render_html(rows, out_path, updated_at, deltas, predictions=None, commentary
     font-size: .75rem;
     padding-top: .05rem;
   }}
+  .michael-view {{
+    display: block;
+    background: #f0f4e8;
+    border: 1px solid #c5d4a0;
+    border-left: 4px solid #2e5f2e;
+    border-radius: 6px;
+    padding: .8rem;
+    margin: .4rem 0;
+    font-weight: normal;
+  }}
+  .michael-header {{
+    display: flex;
+    align-items: center;
+    gap: .6rem;
+    margin-bottom: .5rem;
+  }}
+  .michael-img {{
+    width: 80px;
+    height: 80px;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 3px solid #2e5f2e;
+  }}
+  .michael-title {{
+    display: flex;
+    flex-direction: column;
+    font-size: .85rem;
+  }}
+  .michael-title strong {{
+    color: #2e5f2e;
+    font-size: .95rem;
+  }}
+  .michael-view .comm-text {{
+    display: block;
+    white-space: pre-line;
+    color: #333 !important;
+    font-weight: normal;
+  }}
   @media (max-width: 640px) {{
     body {{ padding: 1rem .5rem; font-size: 14px; }}
     h1 {{ font-size: 1.1rem; }}
@@ -1378,22 +1550,48 @@ def main():
         commentary = load_commentary()
         ts = now.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
+        # Separate Michael's View entries from regular commentary
+        michael_entries = [e for e in commentary if e.get("type") == "michael"]
+        regular = [e for e in commentary if e.get("type") != "michael"]
+
+        # Generate Michael's View ~1 in every MICHAEL_FREQUENCY builds
+        if random.randint(1, MICHAEL_FREQUENCY) == 1 or not michael_entries:
+            # Gather previous michael data for delta-based commentary
+            prev_michael_text = michael_entries[0]["text"] if michael_entries else None
+            prev_michael_scores = None
+            if michael_entries:
+                # Find the history snapshot closest to the previous michael ts
+                m_ts = michael_entries[0].get("ts")
+                if m_ts:
+                    for snap in reversed(history):
+                        if "scores" in snap and snap["ts"] <= m_ts:
+                            prev_michael_scores = snap["scores"]
+                            break
+            michael_text = generate_michael_view(
+                rows, ranks, predictions,
+                prev_michael=prev_michael_text,
+                prev_scores=prev_michael_scores,
+            )
+            if michael_text:
+                michael_entries = [{"ts": ts, "text": michael_text, "type": "michael"}]
+
         # Try AI commentary for live changes
         entry = generate_ai_commentary(
-            rows, ranks, history, predictions, commentary,
+            rows, ranks, history, predictions, regular,
         )
         if entry:
-            # Real change detected — prepend new entry
-            commentary = [{"ts": ts, "text": entry}] + commentary
-            commentary = commentary[:COMMENTARY_MAX]
+            regular = [{"ts": ts, "text": entry}] + regular
+            regular = regular[:COMMENTARY_MAX]
         else:
-            # No changes or AI failed — try regenerating the summary
             fresh = generate_ai_commentary(
-                rows, ranks, history, predictions, commentary, is_first=True,
+                rows, ranks, history, predictions, regular, is_first=True,
             )
             if fresh:
-                commentary = [{"ts": ts, "text": fresh}] + commentary[1:]
-            # If AI failed all attempts, keep existing commentary unchanged
+                regular = [{"ts": ts, "text": fresh}] + regular[1:]
+
+        # Merge back: michael entries stay, regular entries fill remaining slots
+        commentary = michael_entries + regular
+        commentary = commentary[:COMMENTARY_MAX]
         save_commentary(commentary, os.path.join("_site", COMMENTARY_FILENAME))
 
         render_png(rows, "_site/standings.png")
@@ -1405,6 +1603,8 @@ def main():
             shutil.copy(BANNER_SRC, os.path.join("_site", BANNER_SRC))
         else:
             print(f"Warning: {BANNER_SRC} not found; site banner will be missing")
+        if os.path.exists(MICHAEL_RYAN_IMG):
+            shutil.copy(MICHAEL_RYAN_IMG, os.path.join("_site", MICHAEL_RYAN_IMG))
 
         print("\nWrote _site/index.html, _site/standings.png, _site/history.json, _site/banner.jpg")
 
