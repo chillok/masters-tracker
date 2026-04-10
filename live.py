@@ -36,7 +36,7 @@ MODEL_PATH = "masters_model.csv"
 SIM_COUNT = 100_000
 ALPHA = 0.65  # weight on pre-tournament model vs R1 actual
 COMMENTARY_FILENAME = "commentary.json"
-COMMENTARY_MAX = 8
+COMMENTARY_MAX = 5
 
 
 def fetch_leaderboard():
