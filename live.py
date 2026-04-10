@@ -649,17 +649,10 @@ def generate_ai_commentary(rows, ranks, history, predictions,
     prompt = (f"{preamble}\n\nCurrent standings:\n{standings}{pred_line}"
               f"\n\n{task}\n\n{tone}\n\n{accuracy}{prev_lines}")
 
-    text = _call_haiku(api_key, prompt, max_tokens=120)
-    if not text:
-        return None
-
-    # Fact-check the generated commentary against the raw data
-    verify_prompt = (
-        f"You are a fact-checker. Here is the data:\n\n{standings}{pred_line}"
-        f"\n\nGolf scoring: negative is GOOD, positive is BAD. "
+    verify_base = (
+        f"Golf scoring: negative is GOOD, positive is BAD. "
         f"'Even or better' means E or negative ONLY. "
         f"+1, +2, etc. are OVER par (worse than even).\n\n"
-        f"Here is a commentary written about this data:\n\"{text}\"\n\n"
         "Check ONLY for hard factual errors:\n"
         "- Wrong scores (e.g. saying a player is -3 when they are +2)\n"
         "- Wrong rankings or positions\n"
@@ -680,13 +673,44 @@ def generate_ai_commentary(rows, ranks, history, predictions,
         "the data. Then on a NEW line write your final verdict: either "
         "VERDICT: PASS or VERDICT: FAIL with a brief reason."
     )
-    verdict = _call_haiku(api_key, verify_prompt, max_tokens=600)
-    if not verdict or "VERDICT: PASS" not in verdict.upper():
-        print(f"AI commentary failed fact-check ({verdict}), "
-              "falling back to templates")
-        return None
 
-    return text
+    MAX_ATTEMPTS = 3
+    text = None
+    for attempt in range(MAX_ATTEMPTS):
+        if attempt == 0:
+            text = _call_haiku(api_key, prompt, max_tokens=120)
+        else:
+            # Ask the LLM to fix its own errors
+            fix_prompt = (
+                f"{preamble}\n\nCurrent standings:\n{standings}{pred_line}"
+                f"\n\nYou previously wrote this commentary:\n\"{text}\"\n\n"
+                f"A fact-checker found these errors:\n{errors}\n\n"
+                f"Rewrite the commentary fixing ONLY the errors above. "
+                f"Keep the same style, tone, and structure. "
+                f"Same length constraints.\n\n{accuracy}"
+            )
+            text = _call_haiku(api_key, fix_prompt, max_tokens=120)
+
+        if not text:
+            return None
+
+        # Fact-check
+        verify_prompt = (
+            f"You are a fact-checker. Here is the data:\n\n{standings}{pred_line}"
+            f"\n\n{verify_base}"
+            f"\nHere is a commentary written about this data:\n\"{text}\""
+        )
+        verdict = _call_haiku(api_key, verify_prompt, max_tokens=600)
+        if verdict and "VERDICT: PASS" in verdict.upper():
+            return text
+
+        # Extract the error reason for the retry
+        errors = verdict or "Unknown error"
+        print(f"AI commentary attempt {attempt + 1}/{MAX_ATTEMPTS} "
+              f"failed fact-check: {errors}")
+
+    print("AI commentary failed all attempts, falling back to templates")
+    return None
 
 
 def is_pending(thru):
