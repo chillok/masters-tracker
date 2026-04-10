@@ -1711,7 +1711,7 @@ def main():
         if random.randint(1, MICHAEL_FREQUENCY) == 1 or not michael_entries or not mullane_entries:
             michael_entries, mullane_entries = _regenerate_pair()
 
-        # Try AI commentary for live changes
+        # Try AI commentary for live changes (only add if something changed)
         entry = generate_ai_commentary(
             rows, ranks, history, predictions, regular,
             tournament_progress=tournament_progress,
@@ -1719,13 +1719,14 @@ def main():
         if entry:
             regular = [{"ts": ts, "text": entry}] + regular
             regular = regular[:COMMENTARY_MAX]
-        else:
+        elif not regular:
+            # Only generate a summary if we have no commentary at all
             fresh = generate_ai_commentary(
                 rows, ranks, history, predictions, regular, is_first=True,
                 tournament_progress=tournament_progress,
             )
             if fresh:
-                regular = [{"ts": ts, "text": fresh}] + regular[1:]
+                regular = [{"ts": ts, "text": fresh}]
 
         # Merge: guests always kept, regular fills remaining slots
         guest_entries = michael_entries[:1] + mullane_entries[:1]
