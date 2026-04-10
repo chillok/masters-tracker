@@ -638,7 +638,9 @@ def generate_ai_commentary(rows, ranks, history, predictions,
             "This is a live update. Focus ONLY on what changed since "
             "the last update \u2014 new leader, big movers, score swings. "
             "Do NOT rehash the overall standings or repeat information "
-            "from previous commentary. Only mention new developments."
+            "from previous commentary. Only mention new developments. "
+            "Exception: if there have been many changes, you may give "
+            "a brief overview of the current state."
             "\n\nWrite 1\u20132 sentences, max 40 words."
         )
 
