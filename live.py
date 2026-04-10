@@ -1596,8 +1596,9 @@ def main():
             if fresh:
                 regular = [{"ts": ts, "text": fresh}] + regular[1:]
 
-        # Merge back: michael entries stay, regular entries fill remaining slots
+        # Merge back by timestamp so michael entries sit in chronological order
         commentary = michael_entries + regular
+        commentary.sort(key=lambda e: e.get("ts", ""), reverse=True)
         commentary = commentary[:COMMENTARY_MAX]
         save_commentary(commentary, os.path.join("_site", COMMENTARY_FILENAME))
 
