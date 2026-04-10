@@ -1561,26 +1561,28 @@ def main():
         michael_entries = [e for e in commentary if e.get("type") == "michael"]
         regular = [e for e in commentary if e.get("type") != "michael"]
 
-        # Generate Michael's View ~1 in every MICHAEL_FREQUENCY builds
-        if random.randint(1, MICHAEL_FREQUENCY) == 1 or not michael_entries:
-            # Gather previous michael data for delta-based commentary
-            prev_michael_text = michael_entries[0]["text"] if michael_entries else None
-            prev_michael_scores = None
+        def _regenerate_michael():
+            """Generate a fresh Michael's View (delta from previous)."""
+            prev_text = michael_entries[0]["text"] if michael_entries else None
+            prev_sc = None
             if michael_entries:
-                # Find the history snapshot closest to the previous michael ts
                 m_ts = michael_entries[0].get("ts")
                 if m_ts:
                     for snap in reversed(history):
                         if "scores" in snap and snap["ts"] <= m_ts:
-                            prev_michael_scores = snap["scores"]
+                            prev_sc = snap["scores"]
                             break
-            michael_text = generate_michael_view(
+            text = generate_michael_view(
                 rows, ranks, predictions,
-                prev_michael=prev_michael_text,
-                prev_scores=prev_michael_scores,
+                prev_michael=prev_text, prev_scores=prev_sc,
             )
-            if michael_text:
-                michael_entries = [{"ts": ts, "text": michael_text, "type": "michael"}]
+            if text:
+                return [{"ts": ts, "text": text, "type": "michael"}]
+            return michael_entries  # keep old one if generation fails
+
+        # Refresh Michael's View ~1 in every MICHAEL_FREQUENCY builds
+        if random.randint(1, MICHAEL_FREQUENCY) == 1 or not michael_entries:
+            michael_entries = _regenerate_michael()
 
         # Try AI commentary for live changes
         entry = generate_ai_commentary(
@@ -1596,10 +1598,19 @@ def main():
             if fresh:
                 regular = [{"ts": ts, "text": fresh}] + regular[1:]
 
-        # Merge back by timestamp so michael entries sit in chronological order
+        # Merge by timestamp, trim, then guarantee michael is always present
         commentary = michael_entries + regular
         commentary.sort(key=lambda e: e.get("ts", ""), reverse=True)
         commentary = commentary[:COMMENTARY_MAX]
+
+        # If michael got pushed off the bottom, regenerate and swap out oldest
+        if not any(e.get("type") == "michael" for e in commentary):
+            michael_entries = _regenerate_michael()
+            if michael_entries:
+                # Drop the oldest regular entry to make room
+                commentary = commentary[:COMMENTARY_MAX - 1] + michael_entries
+                commentary.sort(key=lambda e: e.get("ts", ""), reverse=True)
+
         save_commentary(commentary, os.path.join("_site", COMMENTARY_FILENAME))
 
         render_png(rows, "_site/standings.png")
