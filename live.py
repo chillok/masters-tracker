@@ -7,7 +7,7 @@ Usage:
     python3 live.py --airdrop    # save image and open in Finder + AirDrop window
     python3 live.py --site       # write _site/index.html + _site/standings.png
 """
-import re, json, urllib.request, sys, subprocess, os, shutil, html as html_mod
+import re, json, urllib.request, sys, subprocess, os, shutil, html as html_mod, csv, random, math
 from datetime import datetime, timezone
 from zoneinfo import ZoneInfo
 
@@ -30,6 +30,12 @@ HISTORY_WINDOW_MIN = 90       # trim snapshots older than this
 DELTA_TARGET_AGE_MIN = 30     # preferred age of reference snapshot for rank-delta arrow
 DELTA_MAX_AGE_MIN = 90        # ignore snapshots older than this when picking a reference
 DUBLIN = ZoneInfo("Europe/Dublin")
+
+MODEL_PATH = "masters_model.csv"
+SIM_COUNT = 100_000
+ALPHA = 0.65  # weight on pre-tournament model vs R1 actual
+COMMENTARY_FILENAME = "commentary.json"
+COMMENTARY_MAX = 5
 
 
 def fetch_leaderboard():
@@ -291,7 +297,7 @@ def compute_deltas(history, current_ranks, now):
     return deltas
 
 
-def save_history(history, current_ranks, now, out_path):
+def save_history(history, current_ranks, now, out_path, current_scores=None):
     """Append the current snapshot, trim old ones, write to out_path."""
     cutoff = now.timestamp() - HISTORY_WINDOW_MIN * 60
     trimmed = []
@@ -301,13 +307,325 @@ def save_history(history, current_ranks, now, out_path):
                 trimmed.append(snap)
         except (KeyError, ValueError):
             continue
-    trimmed.append({
+    snap = {
         "ts": now.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
         "ranks": current_ranks,
-    })
+    }
+    if current_scores is not None:
+        snap["scores"] = current_scores
+    trimmed.append(snap)
     os.makedirs(os.path.dirname(out_path) or ".", exist_ok=True)
     with open(out_path, "w") as f:
         json.dump({"snapshots": trimmed}, f, indent=2)
+
+
+def load_commentary():
+    """Load previous commentary entries from _site or deployed site."""
+    local = os.path.join("_site", COMMENTARY_FILENAME)
+    if os.path.exists(local):
+        try:
+            with open(local) as f:
+                return json.load(f).get("entries", [])
+        except (json.JSONDecodeError, OSError):
+            pass
+    try:
+        req = urllib.request.Request(
+            f"{SITE_URL}/{COMMENTARY_FILENAME}",
+            headers={"User-Agent": "Mozilla/5.0"},
+        )
+        with urllib.request.urlopen(req, timeout=10) as r:
+            return json.load(r).get("entries", [])
+    except Exception:
+        return []
+
+
+def save_commentary(entries, out_path):
+    os.makedirs(os.path.dirname(out_path) or ".", exist_ok=True)
+    with open(out_path, "w") as f:
+        json.dump({"entries": entries[:COMMENTARY_MAX]}, f, indent=2)
+
+
+def _ordinal(n):
+    if 11 <= n % 100 <= 13:
+        return f"{n}th"
+    return f"{n}{({1: 'st', 2: 'nd', 3: 'rd'}).get(n % 10, 'th')}"
+
+
+def generate_day1_summary(rows, ranks):
+    """Build an opening summary from the current standings."""
+    leader_name, leader_scores, leader_total = rows[0]
+    last_total = rows[-1][2]
+    spread = last_total - leader_total
+    gap = rows[1][2] - leader_total if len(rows) > 1 else 0
+
+    # Leader's best and worst pick
+    valid = [(p, s) for p, s, _, _ in leader_scores if s is not None]
+    leader_best = min(valid, key=lambda x: x[1]) if valid else None
+    leader_worst = max(valid, key=lambda x: x[1]) if valid else None
+
+    # Best individual golfer across all entrants
+    best_golfer, best_score, best_entrant = None, 999, None
+    for name, scores, _ in rows:
+        for pname, score, _, _ in scores:
+            if score is not None and score < best_score:
+                best_golfer, best_score, best_entrant = pname, score, name
+
+    text = f"R1 in the books. {leader_name} leads at {fmt_total(leader_total)}"
+    if gap > 0:
+        text += f", {gap} shot{'s' if gap != 1 else ''} clear"
+    text += "."
+
+    if leader_best:
+        text += f" {leader_best[0]} ({fmt_total(leader_best[1])}) doing the heavy lifting"
+        if leader_worst and leader_worst[1] > 0:
+            text += (f" while {leader_worst[0]} ({fmt_total(leader_worst[1])})"
+                     " takes the scenic route")
+        text += "."
+
+    if best_golfer and best_entrant != leader_name:
+        r = ranks.get(best_entrant, 0)
+        # Find what's holding this entrant back
+        worst_pick = None
+        for name, scores, _ in rows:
+            if name == best_entrant:
+                worst_pick = max(
+                    ((p, s) for p, s, _, _ in scores if s is not None),
+                    key=lambda x: x[1], default=None,
+                )
+                break
+        text += (f" {best_golfer} ({fmt_total(best_score)}) is the best pick"
+                 f" in the field but {best_entrant} sits {_ordinal(r)}")
+        if worst_pick and worst_pick[1] > 0:
+            text += (f" \u2014 {worst_pick[0]} ({fmt_total(worst_pick[1])})"
+                     " undoing all that good work")
+        text += "."
+
+    text += f" {spread} shots separate the field. Plenty of golf left."
+    return text
+
+
+def generate_commentary(rows, ranks, history, now):
+    """Compare current state to the most recent snapshot with scores.
+
+    Returns a commentary string, or None if nothing meaningful changed.
+    """
+    prev = None
+    for snap in reversed(history):
+        if "scores" in snap:
+            prev = snap
+            break
+    if not prev:
+        return None
+
+    prev_ranks = prev.get("ranks", {})
+    prev_scores = prev.get("scores", {})
+    current_scores = {name: total for name, _, total in rows}
+
+    # Check if anything changed
+    changed = False
+    for name in ranks:
+        if (ranks[name] != prev_ranks.get(name)
+                or current_scores.get(name) != prev_scores.get(name)):
+            changed = True
+            break
+    if not changed:
+        return None
+
+    leader_name, _, leader_total = rows[0]
+
+    # New leader?
+    prev_leader = None
+    for name, r in prev_ranks.items():
+        if r == 1:
+            prev_leader = name
+            break
+    if prev_leader and prev_leader != leader_name:
+        gap = rows[1][2] - leader_total if len(rows) > 1 else 0
+        text = (f"Shakeup at the top \u2014 {leader_name} takes the lead"
+                f" at {fmt_total(leader_total)}")
+        if gap > 0:
+            text += f", {gap} clear"
+        text += f". {prev_leader} drops to {_ordinal(ranks.get(prev_leader, 0))}."
+        text += " The WhatsApp group will be busy."
+        return text
+
+    # Biggest rank mover
+    movers = []
+    for name in ranks:
+        prev_r = prev_ranks.get(name)
+        if prev_r is None:
+            continue
+        diff = prev_r - ranks[name]  # positive = climbed
+        if abs(diff) >= 2:
+            prev_sc = prev_scores.get(name)
+            curr_sc = current_scores.get(name)
+            sc_text = ""
+            if prev_sc is not None and curr_sc is not None and prev_sc != curr_sc:
+                d = curr_sc - prev_sc
+                if d < 0:
+                    sc_text = (f" after gaining {abs(d)}"
+                               f" shot{'s' if abs(d) != 1 else ''}")
+                else:
+                    sc_text = (f" after dropping {d}"
+                               f" shot{'s' if d != 1 else ''}")
+            movers.append((name, diff, ranks[name], prev_r, sc_text))
+
+    if movers:
+        movers.sort(key=lambda m: abs(m[1]), reverse=True)
+        name, diff, curr_r, prev_r, sc_text = movers[0]
+        if diff > 0:
+            return (f"{name} on the charge \u2014 up from {_ordinal(prev_r)}"
+                    f" to {_ordinal(curr_r)}{sc_text}."
+                    f" The group chat will be heating up.")
+        else:
+            return (f"Not the update {name} wanted \u2014 slides from"
+                    f" {_ordinal(prev_r)} to {_ordinal(curr_r)}{sc_text}."
+                    f" Still plenty of holes to play.")
+
+    # No big rank moves, but scores changed — report the state of play
+    gap = rows[1][2] - leader_total if len(rows) > 1 else 0
+    prev_leader_sc = prev_scores.get(leader_name)
+    if prev_leader_sc is not None and leader_total != prev_leader_sc:
+        d = leader_total - prev_leader_sc
+        if d < 0:
+            return (f"{leader_name} extends the advantage \u2014 now"
+                    f" at {fmt_total(leader_total)}, {gap}"
+                    f" shot{'s' if gap != 1 else ''} clear."
+                    f" Starting to look comfortable up there.")
+        else:
+            return (f"{leader_name} gives back {abs(d)}"
+                    f" shot{'s' if abs(d) != 1 else ''}, now"
+                    f" at {fmt_total(leader_total)} ({gap}"
+                    f" shot{'s' if gap != 1 else ''} clear)."
+                    f" The chasing pack will sense blood.")
+
+    return (f"{leader_name} holds firm at {fmt_total(leader_total)}"
+            f", {gap} shot{'s' if gap != 1 else ''} clear."
+            f" As you were.")
+
+
+def _build_standings_prompt(rows, ranks, prev_ranks, prev_scores, predictions,
+                            existing_commentary):
+    """Build the structured data block for the AI commentary prompt."""
+    current_scores = {name: total for name, _, total in rows}
+    lines = []
+    for name, scores, total in rows:
+        golfers = ", ".join(
+            f"{p} ({fmt_total(s)})" for p, s, _, _ in scores if s is not None
+        )
+        rank = ranks[name]
+        extras = []
+        pr = prev_ranks.get(name)
+        if pr and pr != rank:
+            extras.append(f"was {_ordinal(pr)}")
+        ps = prev_scores.get(name)
+        if ps is not None and ps != total:
+            d = total - ps
+            extras.append(f"{'gained' if d < 0 else 'dropped'} {abs(d)}")
+        ex = f" ({', '.join(extras)})" if extras else ""
+        lines.append(f"  {_ordinal(rank)}: {name} {fmt_total(total)}{ex}"
+                      f" \u2014 picks: {golfers}")
+    standings = "\n".join(lines)
+
+    pred_line = ""
+    if predictions:
+        top = predictions[:3]
+        pred_line = ("\nAI win probabilities: "
+                     + ", ".join(f"{n} {w:.1f}%" for n, w, _, _ in top))
+
+    prev_lines = ""
+    if existing_commentary:
+        texts = [e["text"] for e in existing_commentary[:3]]
+        prev_lines = ("\n\nPrevious commentary (don't repeat yourself):\n"
+                      + "\n".join(f"- {t}" for t in texts))
+
+    return standings, pred_line, prev_lines
+
+
+def generate_ai_commentary(rows, ranks, history, predictions,
+                           existing_commentary, is_first=False):
+    """Use Claude to generate natural commentary. Returns str or None."""
+    api_key = os.environ.get("ANTHROPIC_API_KEY")
+    if not api_key:
+        return None
+
+    prev_ranks, prev_scores = {}, {}
+    if not is_first:
+        prev = None
+        for snap in reversed(history):
+            if "scores" in snap:
+                prev = snap
+                break
+        if not prev:
+            return None
+        prev_ranks = prev.get("ranks", {})
+        prev_scores = prev.get("scores", {})
+        current_scores = {name: total for name, _, total in rows}
+        if not any(
+            ranks.get(n) != prev_ranks.get(n)
+            or current_scores.get(n) != prev_scores.get(n)
+            for n in ranks
+        ):
+            return None
+
+    standings, pred_line, prev_lines = _build_standings_prompt(
+        rows, ranks, prev_ranks, prev_scores, predictions,
+        existing_commentary,
+    )
+
+    preamble = (
+        'You are the commentator for a Masters golf sweepstake among friends '
+        'called "The Guinness Storehouse". Each entrant picked 3 golfers '
+        '\u2014 lowest combined score wins.'
+    )
+
+    if is_first:
+        task = (
+            "This is the end-of-R1 summary. Summarise the standings "
+            "\u2014 who leads, who's the best individual pick, any "
+            "interesting storylines (e.g. a great golfer whose entrant "
+            "is held back by other picks)."
+            "\n\nWrite 2\u20133 sentences, max 60 words."
+        )
+    else:
+        task = (
+            "This is a live update. Focus on what changed since the "
+            "last update \u2014 new leader, big movers, score swings."
+            "\n\nWrite 1\u20132 sentences, max 40 words."
+        )
+
+    tone = (
+        "Tone: knowledgeable friend in the group chat \u2014 "
+        "lighthearted, a bit of dry humour, but not cheesy. "
+        "No exclamation marks. No hashtags or emojis. "
+        "Be specific \u2014 use real names and numbers."
+    )
+
+    prompt = (f"{preamble}\n\nCurrent standings:\n{standings}{pred_line}"
+              f"\n\n{task}\n\n{tone}{prev_lines}")
+
+    body = json.dumps({
+        "model": "claude-haiku-4-5-20251001",
+        "max_tokens": 120,
+        "messages": [{"role": "user", "content": prompt}],
+    })
+    req = urllib.request.Request(
+        "https://api.anthropic.com/v1/messages",
+        data=body.encode(),
+        headers={
+            "Content-Type": "application/json",
+            "x-api-key": api_key,
+            "anthropic-version": "2023-06-01",
+        },
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=15) as r:
+            resp = json.load(r)
+        text = resp["content"][0]["text"].strip().strip('"')
+        return text
+    except Exception as e:
+        print(f"AI commentary failed ({e}), falling back to templates")
+        return None
 
 
 def is_pending(thru):
@@ -316,7 +634,87 @@ def is_pending(thru):
     return ":" in t or t in ("-", "")
 
 
-def render_html(rows, out_path, updated_at, deltas):
+def load_model():
+    """Read masters_model.csv → {player_name: {rank, safety, score}}."""
+    model = {}
+    with open(MODEL_PATH, newline="") as f:
+        for row in csv.DictReader(f):
+            model[row["Player"].strip()] = {
+                "rank": int(row["Rank"]),
+                "safety": int(row["Safety"]),
+                "score": int(row["OverallModelScore"]),
+            }
+    return model
+
+
+def run_predictions(rows, model):
+    """Monte Carlo win-probability for each entrant (blends model + R1)."""
+    rng = random.Random(42)
+    ROUNDS_LEFT = 3  # assumes post-R1
+
+    # Build per-golfer simulation parameters
+    golfer_params = {}
+    for _name, scores, _total in rows:
+        for pname, score, thru, _raw in scores:
+            if pname in golfer_params:
+                continue
+            if score is None:
+                # CUT / WD / DQ — fixed at 0 (matches current scoring)
+                golfer_params[pname] = (0, 0.0, 0.0)
+                continue
+            m = model.get(pname)
+            rank = m["rank"] if m else 45
+            safety = m["safety"] if m else 45
+            # Model expected per round (to par): rank 1 ≈ −3.0, rank 91 ≈ +6.0
+            model_exp = -3.0 + (rank - 1) * 9.0 / 90
+            # Blend model with actual score (between rounds, thru shows
+            # next-round tee time but totalScore already has R1)
+            adj_exp = ALPHA * model_exp + (1 - ALPHA) * score
+            # SD: lower safety rank → tighter distribution
+            sd = 2.5 + 1.5 * (safety / 91)
+            golfer_params[pname] = (
+                score,
+                ROUNDS_LEFT * adj_exp,
+                math.sqrt(ROUNDS_LEFT) * sd,
+            )
+
+    n = len(rows)
+    wins = [0] * n
+    top3 = [0] * n
+    final_sums = [0.0] * n
+    golfer_names = list(golfer_params.keys())
+
+    for _ in range(SIM_COUNT):
+        # Simulate remaining rounds for each unique golfer once
+        sim_final = {}
+        for pname in golfer_names:
+            cur, rm, rsd = golfer_params[pname]
+            sim_final[pname] = cur + rng.gauss(rm, rsd)
+
+        finals = []
+        for idx, (_name, scores, _total) in enumerate(rows):
+            t = sum(sim_final[pname] for pname, *_ in scores)
+            finals.append((t, idx))
+        finals.sort()
+        wins[finals[0][1]] += 1
+        for i in range(min(3, n)):
+            top3[finals[i][1]] += 1
+        for t, idx in finals:
+            final_sums[idx] += t
+
+    results = []
+    for i, (name, _, _) in enumerate(rows):
+        results.append((
+            name,
+            100.0 * wins[i] / SIM_COUNT,
+            100.0 * top3[i] / SIM_COUNT,
+            final_sums[i] / SIM_COUNT,
+        ))
+    results.sort(key=lambda r: -r[1])
+    return results
+
+
+def render_html(rows, out_path, updated_at, deltas, predictions=None, commentary=None):
     """Render the standings as a self-contained HTML page."""
     esc = html_mod.escape
 
@@ -367,6 +765,61 @@ def render_html(rows, out_path, updated_at, deltas):
 
     updated_str = updated_at.astimezone(DUBLIN).strftime("%Y-%m-%d %H:%M %Z")
     updated_iso = updated_at.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+    # Build predictions section
+    pred_section = ""
+    if predictions:
+        max_win = max(p[1] for p in predictions) or 1
+        pred_rows_html = []
+        for pname, win_pct, top3_pct, exp_final in predictions:
+            bar_w = win_pct / max_win * 100 if max_win > 0 else 0
+            pred_rows_html.append(
+                f'<tr><td>{esc(pname)}</td>'
+                f'<td class="pred-bar-cell"><div class="pred-bar-outer">'
+                f'<div class="pred-bar-track"><div class="pred-bar-fill" style="width:{bar_w:.1f}%"></div></div>'
+                f'<span class="pred-pct">{win_pct:.1f}%</span></div></td>'
+                f'<td class="pred-num">{top3_pct:.1f}%</td>'
+                f'<td class="pred-num">{exp_final:+.1f}</td></tr>'
+            )
+        pred_tbody = "\n".join(pred_rows_html)
+        pred_section = (
+            '  <div class="predictions">\n'
+            '    <h2>AI Win Probability</h2>\n'
+            '    <div class="pred-note">Monte Carlo simulation &middot; pre-tournament model + live scores</div>\n'
+            '    <table class="pred-table">\n'
+            '      <thead><tr><th>Entrant</th><th>Win %</th><th>Top 3 %</th><th>Exp. Final</th></tr></thead>\n'
+            '      <tbody>\n'
+            f'{pred_tbody}\n'
+            '      </tbody>\n'
+            '    </table>\n'
+            '  </div>'
+        )
+
+    # Build commentary section
+    comm_section = ""
+    if commentary:
+        comm_entries = []
+        for entry in commentary[:5]:
+            ts_raw = entry.get("ts", "")
+            try:
+                dt = _parse_iso(ts_raw).astimezone(DUBLIN)
+                time_str = dt.strftime("%H:%M")
+            except (ValueError, AttributeError):
+                time_str = ts_raw
+            text = entry.get("text", "")
+            comm_entries.append(
+                f'<div class="comm-entry">'
+                f'<span class="comm-time">{esc(time_str)}</span>'
+                f'<span class="comm-text">{esc(text)}</span>'
+                f'</div>'
+            )
+        comm_html = "\n".join(comm_entries)
+        comm_section = (
+            '  <div class="commentary">\n'
+            '    <div class="comm-header">Live Commentary</div>\n'
+            f'{comm_html}\n'
+            '  </div>'
+        )
 
     page = f"""<!doctype html>
 <html lang="en">
@@ -502,6 +955,111 @@ def render_html(rows, out_path, updated_at, deltas):
     font-size: .78rem;
     color: var(--muted);
   }}
+  .predictions {{
+    margin-top: 2rem;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: var(--cream);
+    box-shadow: 0 1px 3px rgba(0,0,0,.06);
+    padding: 1.2rem 1.4rem;
+  }}
+  .predictions h2 {{
+    color: var(--green);
+    font-size: 1rem;
+    margin: 0 0 .25rem;
+    letter-spacing: .02em;
+  }}
+  .pred-note {{
+    color: var(--muted);
+    font-size: .72rem;
+    margin-bottom: 1rem;
+  }}
+  .pred-table {{
+    width: 100%;
+    border-collapse: collapse;
+  }}
+  .pred-table th {{
+    text-align: left;
+    padding: .45rem .6rem;
+    font-size: .78rem;
+    color: var(--muted);
+    border-bottom: 1px solid var(--border);
+    white-space: nowrap;
+  }}
+  .pred-table td {{
+    padding: .4rem .6rem;
+    border-top: 1px solid var(--border);
+    font-size: .85rem;
+  }}
+  .pred-table tr:nth-child(even) td {{ background: var(--alt); }}
+  .pred-bar-cell {{ min-width: 140px; }}
+  .pred-bar-outer {{
+    display: flex;
+    align-items: center;
+    gap: .5rem;
+  }}
+  .pred-bar-track {{
+    flex: 1;
+    background: var(--alt);
+    border-radius: 3px;
+    height: .9rem;
+    overflow: hidden;
+    min-width: 60px;
+  }}
+  .pred-bar-fill {{
+    background: var(--green);
+    height: 100%;
+    border-radius: 3px;
+  }}
+  .pred-pct {{
+    font-size: .78rem;
+    white-space: nowrap;
+    min-width: 3.5em;
+  }}
+  .pred-num {{
+    white-space: nowrap;
+    text-align: right;
+  }}
+  .commentary {{
+    margin-bottom: 1.5rem;
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--green);
+    border-radius: 0 6px 6px 0;
+    background: var(--cream);
+    box-shadow: 0 1px 3px rgba(0,0,0,.06);
+    padding: .7rem 1.2rem;
+  }}
+  .comm-header {{
+    color: var(--green);
+    font-size: .78rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .08em;
+    margin-bottom: .5rem;
+  }}
+  .comm-entry {{
+    display: flex;
+    gap: .7rem;
+    padding: .4rem 0;
+    font-size: .82rem;
+    line-height: 1.45;
+  }}
+  .comm-entry + .comm-entry {{
+    border-top: 1px solid var(--border);
+  }}
+  .comm-entry:first-of-type {{
+    font-weight: 500;
+  }}
+  .comm-entry:not(:first-of-type) .comm-text {{
+    color: var(--muted);
+  }}
+  .comm-time {{
+    color: var(--muted);
+    white-space: nowrap;
+    min-width: 3.2em;
+    font-size: .75rem;
+    padding-top: .05rem;
+  }}
   @media (max-width: 640px) {{
     body {{ padding: 1rem .5rem; font-size: 14px; }}
     h1 {{ font-size: 1.1rem; }}
@@ -509,6 +1067,9 @@ def render_html(rows, out_path, updated_at, deltas):
     thead th, tbody td {{ padding: .5rem .55rem; }}
     td.players .player-main,
     td.players .player-sub {{ white-space: normal; }}
+    .predictions {{ padding: .8rem; }}
+    .pred-bar-track {{ min-width: 40px; }}
+    .commentary {{ padding: .5rem .8rem; }}
   }}
 </style>
 </head>
@@ -519,6 +1080,7 @@ def render_html(rows, out_path, updated_at, deltas):
     <h1>The Guinness Storehouse LIVE STANDINGS</h1>
     <div class="meta">Updated {esc(updated_str)} · <span class="rel-time" data-iso="{esc(updated_iso)}">just now</span> · refreshes every 5 min</div>
   </div>
+  {comm_section}
   <div class="table-wrap">
     <table>
       <thead><tr>{thead}</tr></thead>
@@ -527,6 +1089,7 @@ def render_html(rows, out_path, updated_at, deltas):
       </tbody>
     </table>
   </div>
+  {pred_section}
   <footer>Lowest combined total wins. Scores relative to par. ⬆ / ⬇ marks rank change over the last ~30 min. Faded players have not yet teed off.</footer>
 </main>
 <script>
@@ -631,9 +1194,32 @@ def main():
         history = load_history()
         deltas = compute_deltas(history, ranks, now)
 
+        model = load_model()
+        predictions = run_predictions(rows, model)
+
+        current_scores = {name: total for name, _, total in rows}
+        commentary = load_commentary()
+        ts = now.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+        if not commentary:
+            # Seed with a Day 1 summary — try AI, fall back to template
+            entry = generate_ai_commentary(
+                rows, ranks, history, predictions, [], is_first=True,
+            ) or generate_day1_summary(rows, ranks)
+            commentary = [{"ts": ts, "text": entry}]
+        else:
+            # Try AI commentary, fall back to template-based
+            entry = generate_ai_commentary(
+                rows, ranks, history, predictions, commentary,
+            ) or generate_commentary(rows, ranks, history, now)
+            if entry:
+                commentary = [{"ts": ts, "text": entry}] + commentary
+                commentary = commentary[:COMMENTARY_MAX]
+        save_commentary(commentary, os.path.join("_site", COMMENTARY_FILENAME))
+
         render_png(rows, "_site/standings.png")
-        render_html(rows, "_site/index.html", now, deltas)
-        save_history(history, ranks, now, os.path.join("_site", HISTORY_FILENAME))
+        render_html(rows, "_site/index.html", now, deltas, predictions, commentary)
+        save_history(history, ranks, now, os.path.join("_site", HISTORY_FILENAME),
+                     current_scores=current_scores)
 
         if os.path.exists(BANNER_SRC):
             shutil.copy(BANNER_SRC, os.path.join("_site", BANNER_SRC))
