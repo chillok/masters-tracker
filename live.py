@@ -631,13 +631,14 @@ def generate_ai_commentary(rows, ranks, history, predictions,
         "lighthearted, a bit of dry humour, but not cheesy. "
         "No exclamation marks. No hashtags or emojis. "
         "Be specific \u2014 use real names and numbers.\n\n"
-        "Subtle running jokes to weave in ONLY where they fit naturally "
-        "(don't force them, don't use all of them in one update):\n"
+        "Subtle running jokes you MAY weave in, but ONLY about 25% of "
+        "the time each \u2014 most updates should have NO bias at all:\n"
         "- Gentle digs at Noel Smyth (underperforming, questionable picks, etc.)\n"
         "- Light ribbing of P\u00e1draig Connery (unlucky, cursed, etc.)\n"
         "- Quietly optimistic spin on Barry Dunne even when he's clearly struggling\n"
-        "These should be understated and wry, not mean-spirited. "
-        "If there's nothing natural to say about them, just skip it."
+        "The majority of updates should be straight commentary with no "
+        "mention of these running jokes. When you do include one, keep it "
+        "understated and wry, not mean-spirited."
     )
 
     accuracy = (
