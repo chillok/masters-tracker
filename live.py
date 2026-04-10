@@ -691,11 +691,18 @@ def _build_standings_prompt(rows, ranks, prev_ranks, prev_scores, predictions,
                 "\n\nALL active commentary on the page right now "
                 "(users see these alongside your new entry):\n"
                 + "\n".join(f"- {t}" for t in texts)
-                + "\n\nCRITICAL: Do NOT repeat phrases, sentence patterns, "
-                "metaphors, or observations already used above. "
-                "Vary your vocabulary, structure, and angle. If a previous "
-                "entry mentions a player or storyline, find a DIFFERENT angle "
-                "or talk about someone else entirely."
+                + "\n\nCRITICAL — VARIETY IS EVERYTHING:\n"
+                "1. Do NOT repeat sentence structures from above. If previous "
+                "entries use '[Name]'s [verb]ed to [score]' patterns, you MUST "
+                "use a completely different structure.\n"
+                "2. Do NOT lead with the same entrant as a recent entry.\n"
+                "3. Do NOT use the same verbs (slipped, clawed, dropped, "
+                "climbed, surged, extended). Find fresh language every time.\n"
+                "4. Try different angles: a golfer's individual story, a "
+                "head-to-head between two entrants, a shared-player dynamic, "
+                "a dig using someone's personal info, a what-if scenario.\n"
+                "5. Vary sentence length and rhythm — not every update needs "
+                "to be '[Name] does X. [Name] does Y.'"
             )
 
     # Add trajectory summary (~30% of the time to avoid repetition)
