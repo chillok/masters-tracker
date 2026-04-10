@@ -894,12 +894,13 @@ def generate_michael_view(rows, ranks, predictions, prev_michael=None,
 
     character += (
         "\n" + ENTRANT_BIOS
-        + "You MUST reference at least one entrant's personal info in your "
-        "commentary — their job, nickname, or interests. Work it into your "
-        "GAA analogies and digs. E.g. 'Flavin, de Guinness Storehouse himself, "
-        "picked like a man who's had one too many' or 'Seward should stick to "
-        "de guards, his picks are criminal'. This is what makes it personal "
-        "and funny.\n"
+        + "You MUST work in at least one pun or play on words referencing "
+        "an entrant's job, nickname, or interests. Don't state the fact "
+        "directly — make it a sly pun woven into de commentary. "
+        "E.g. 'Seward's picks are under investigation', 'Noel's squad has "
+        "no fitness left in dem', 'Flavin dispensin' pain relief to nobody', "
+        "'Connery's harvest is lookin' bare dis year'. Deadpan delivery — "
+        "never explain de joke.\n"
     )
 
     # Tournament calibration — prevent overstating leads early on
@@ -1024,12 +1025,12 @@ def generate_mullane_view(rows, ranks, predictions, michael_text=None,
 
     character += (
         "\n" + ENTRANT_BIOS
-        + "You MUST reference at least one entrant's personal info — their "
-        "job, nickname, or interests. Work it into your digs and hurling "
-        "analogies boy. E.g. 'Noel boy, stick to de gym, your picks are "
-        "weaker than a minor B panel' or 'Tobin thinks he knows golf boy, "
-        "he's from Kilkenny — what would he know'. Make it personal and "
-        "funny.\n"
+        + "You MUST work in at least one pun or play on words referencing "
+        "an entrant's job, nickname, or interests boy. Don't state it "
+        "directly — make it a sly pun. E.g. 'Seward's picks should be "
+        "arrested boy', 'Noel's squad has no fitness in dem', 'Flavin "
+        "can't prescribe a cure for dem picks boy', 'Connery's harvest "
+        "is rotten this year like'. Never explain de joke boy.\n"
     )
 
     if michael_text:
@@ -1171,8 +1172,11 @@ def generate_ai_commentary(rows, ranks, history, predictions,
         "- Quietly optimistic spin on Barry Dunne even when he's clearly struggling\n"
         "Keep digs wry and comic, not genuinely mean-spirited.\n\n"
         + ENTRANT_BIOS
-        + "Use this info to personalise digs — e.g. reference someone's "
-        "job, nickname, or interests when slagging their picks."
+        + "Use this info for sly puns and wordplay — don't state facts "
+        "directly ('Seward is a guard'), instead weave them in as puns "
+        "('Seward's picks should be arrested', 'Noel's squad has no "
+        "fitness', 'Flavin can't prescribe a cure for those picks', "
+        "'Connery's harvest is looking bare'). Never explain the joke."
     )
 
     accuracy = (
