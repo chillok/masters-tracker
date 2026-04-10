@@ -518,7 +518,14 @@ def _build_standings_prompt(rows, ranks, prev_ranks, prev_scores, predictions,
         golfer_parts = []
         for p, s, thru, _ in scores:
             if s is not None:
-                thru_str = f" thru {thru}" if thru and not str(thru).startswith("F") else ""
+                # Only show thru if it's a hole number (not a tee time)
+                thru_s = str(thru) if thru else ""
+                if thru_s.isdigit():
+                    thru_str = f", thru {thru_s}"
+                elif thru_s.startswith("F"):
+                    thru_str = ", finished"
+                else:
+                    thru_str = ""
                 golfer_parts.append(f"{p} ({fmt_total(s)}{thru_str})")
         golfers = ", ".join(golfer_parts)
         rank = ranks[name]
@@ -546,7 +553,32 @@ def _build_standings_prompt(rows, ranks, prev_ranks, prev_scores, predictions,
     else:
         shared_line = ""
 
-    standings = "\n".join(lines) + shared_line
+    # Build a prominent changes summary
+    changes_lines = []
+    for name, scores, total in rows:
+        ps = prev_scores.get(name)
+        pr = prev_ranks.get(name)
+        if ps is not None and ps != total:
+            d = total - ps
+            direction = "improved" if d < 0 else "dropped"
+            # Find which golfers are on course (likely caused the change)
+            active = [p for p, s, thru, _ in scores
+                      if thru and str(thru).isdigit()]
+            active_str = f" ({', '.join(active)} on course)" if active else ""
+            changes_lines.append(
+                f"  {name}: {fmt_total(ps)} -> {fmt_total(total)} "
+                f"({direction} {abs(d)}){active_str}")
+        elif pr is not None and pr != ranks[name]:
+            changes_lines.append(
+                f"  {name}: rank {_ordinal(pr)} -> {_ordinal(ranks[name])}")
+
+    if changes_lines:
+        changes_block = ("\n\nCHANGES SINCE LAST UPDATE (focus on these):\n"
+                         + "\n".join(changes_lines))
+    else:
+        changes_block = ""
+
+    standings = "\n".join(lines) + shared_line + changes_block
 
     pred_line = ""
     if predictions:
