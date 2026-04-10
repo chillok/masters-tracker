@@ -36,7 +36,7 @@ MODEL_PATH = "masters_model.csv"
 SIM_COUNT = 100_000
 ALPHA = 0.65  # weight on pre-tournament model vs R1 actual
 COMMENTARY_FILENAME = "commentary.json"
-COMMENTARY_MAX = 5
+COMMENTARY_MAX = 8
 
 
 def fetch_leaderboard():
@@ -623,7 +623,7 @@ def _call_haiku(api_key, prompt, max_tokens=120):
 MICHAEL_RYAN_IMG = "michael_ryan.jpg"
 
 
-MICHAEL_FREQUENCY = 10  # generate roughly 1 in every N builds
+MICHAEL_FREQUENCY = 8  # generate roughly 1 in every N builds
 
 
 def generate_michael_view(rows, ranks, predictions, prev_michael=None,
