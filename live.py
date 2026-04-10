@@ -892,7 +892,15 @@ def generate_michael_view(rows, ranks, predictions, prev_michael=None,
         "a match in his life\n"
     )
 
-    character += "\n" + ENTRANT_BIOS
+    character += (
+        "\n" + ENTRANT_BIOS
+        + "You MUST reference at least one entrant's personal info in your "
+        "commentary — their job, nickname, or interests. Work it into your "
+        "GAA analogies and digs. E.g. 'Flavin, de Guinness Storehouse himself, "
+        "picked like a man who's had one too many' or 'Seward should stick to "
+        "de guards, his picks are criminal'. This is what makes it personal "
+        "and funny.\n"
+    )
 
     # Tournament calibration — prevent overstating leads early on
     progress_note = ""
@@ -1014,7 +1022,15 @@ def generate_mullane_view(rows, ranks, predictions, michael_text=None,
         "never saw a golf club in his life\n"
     )
 
-    character += "\n" + ENTRANT_BIOS
+    character += (
+        "\n" + ENTRANT_BIOS
+        + "You MUST reference at least one entrant's personal info — their "
+        "job, nickname, or interests. Work it into your digs and hurling "
+        "analogies boy. E.g. 'Noel boy, stick to de gym, your picks are "
+        "weaker than a minor B panel' or 'Tobin thinks he knows golf boy, "
+        "he's from Kilkenny — what would he know'. Make it personal and "
+        "funny.\n"
+    )
 
     if michael_text:
         task = (
