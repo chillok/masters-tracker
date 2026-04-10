@@ -1104,8 +1104,10 @@ def render_html(rows, out_path, updated_at, deltas, predictions=None, commentary
                     f'<div class="michael-banner">'
                     f'<img src="{MICHAEL_RYAN_IMG}" class="michael-img" '
                     f'alt="Michael Ryan">'
+                    f'<div class="michael-name-block">'
                     f'<span class="michael-label">Michael\'s View</span>'
-                    f'</div>'
+                    f'<span class="michael-subtitle">Thoughts from the Nire Valley</span>'
+                    f'</div></div>'
                     f'<span class="michael-text">{esc(text)}</span>'
                     f'</div></div>'
                 )
@@ -1149,7 +1151,7 @@ def render_html(rows, out_path, updated_at, deltas, predictions=None, commentary
     padding: 2rem 1rem;
     background: var(--cream);
     color: var(--dark);
-    font-family: Menlo, Monaco, "SF Mono", Consolas, monospace;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
     font-size: 15px;
   }}
   main {{
@@ -1198,6 +1200,8 @@ def render_html(rows, out_path, updated_at, deltas, predictions=None, commentary
   table {{
     border-collapse: collapse;
     width: 100%;
+    font-family: Menlo, Monaco, "SF Mono", Consolas, monospace;
+    font-size: 14px;
   }}
   thead th {{
     background: var(--green);
@@ -1378,12 +1382,23 @@ def render_html(rows, out_path, updated_at, deltas, predictions=None, commentary
     object-fit: cover;
     border: 3px solid #1a3f7a;
   }}
+  .michael-name-block {{
+    display: flex;
+    flex-direction: column;
+  }}
   .michael-label {{
-    font-family: 'Brush Script MT', 'Segoe Script', 'Apple Chancery', cursive;
-    font-size: 1.5rem;
-    font-weight: 400;
+    font-size: 1.1rem;
+    font-weight: 700;
+    font-style: italic;
     color: #1a3f7a;
-    letter-spacing: .02em;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+  }}
+  .michael-subtitle {{
+    font-size: .7rem;
+    color: var(--muted);
+    font-style: italic;
+    letter-spacing: .03em;
   }}
   .michael-text {{
     display: block;
