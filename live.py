@@ -1334,7 +1334,7 @@ def render_html(rows, out_path, updated_at, deltas, predictions=None, commentary
                     f'<span class="comm-time">{esc(time_str)}</span>'
                     f'<div class="comm-text">'
                     f'<div class="guest-banner">'
-                    f'<img src="{DICK_HACKETT_IMG}" class="guest-img" '
+                    f'<img src="{DICK_HACKETT_IMG}" class="guest-img" style="transform:rotate(180deg)" '
                     f'alt="Dick Hackett">'
                     f'<div class="guest-name-block">'
                     f'<span class="guest-label hackett-color">Dick Hackett\'s Alternate Angle</span>'
