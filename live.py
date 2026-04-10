@@ -620,9 +620,20 @@ def _build_standings_prompt(rows, ranks, prev_ranks, prev_scores, predictions,
 
     prev_lines = ""
     if existing_commentary:
-        texts = [e["text"] for e in existing_commentary[:3]]
-        prev_lines = ("\n\nPrevious commentary (don't repeat yourself):\n"
-                      + "\n".join(f"- {t}" for t in texts))
+        # Show ALL active entries so the LLM can avoid repetition
+        texts = [e["text"] for e in existing_commentary
+                 if e.get("type") not in ("michael", "mullane")]
+        if texts:
+            prev_lines = (
+                "\n\nALL active commentary on the page right now "
+                "(users see these alongside your new entry):\n"
+                + "\n".join(f"- {t}" for t in texts)
+                + "\n\nCRITICAL: Do NOT repeat phrases, sentence patterns, "
+                "metaphors, or observations already used above. "
+                "Vary your vocabulary, structure, and angle. If a previous "
+                "entry mentions a player or storyline, find a DIFFERENT angle "
+                "or talk about someone else entirely."
+            )
 
     return standings, pred_line, prev_lines
 
@@ -939,13 +950,19 @@ def generate_ai_commentary(rows, ranks, history, predictions,
         "Be specific \u2014 use real names and numbers.\n\n"
         f"IMPORTANT: The Masters is 4 rounds (72 holes). "
         f"Current progress: {tournament_progress or 'unknown'}. "
+        "Use this to calibrate your tone. You MAY occasionally mention "
+        "how much golf is left (~20% of the time), but do NOT parrot "
+        "exact round/hole counts every update — it gets repetitive. "
+        "Most updates should just get on with the commentary.\n"
         "Do NOT use language like 'runaway', 'lock', 'untouchable', "
         "'insurmountable' or treat leads as decisive unless we are "
-        "deep into R4. Keep perspective on how much golf is left.\n\n"
-        "Subtle running jokes you MAY weave in, but ONLY about 25% of "
+        "deep into R4.\n\n"
+        "Subtle running jokes you MAY weave in, but ONLY about 35% of "
         "the time each \u2014 most updates should have NO bias at all:\n"
         "- Gentle digs at Noel Smyth (underperforming, questionable picks, etc.)\n"
         "- Light ribbing of P\u00e1draig Connery (unlucky, cursed, etc.)\n"
+        "- Mocking Jonathan Flavin for boring, safe, unimaginative picks \u2014 "
+        "he took the obvious choices and has no flair\n"
         "- Quietly optimistic spin on Barry Dunne even when he's clearly struggling\n"
         "The majority of updates should be straight commentary with no "
         "mention of these running jokes. When you do include one, keep it "
