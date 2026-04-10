@@ -581,9 +581,9 @@ def _build_standings_prompt(rows, ranks, prev_ranks, prev_scores, predictions,
     standings = "\n".join(lines) + shared_line + changes_block
 
     pred_line = ""
-    if predictions:
+    if predictions and random.randint(1, 5) == 1:
         top = predictions[:3]
-        pred_line = ("\nAI win probabilities: "
+        pred_line = ("\nAI win probabilities (mention only if interesting): "
                      + ", ".join(f"{n} {w:.1f}%" for n, w, _, _ in top))
 
     prev_lines = ""
