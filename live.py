@@ -601,7 +601,14 @@ def generate_ai_commentary(rows, ranks, history, predictions,
     preamble = (
         'You are the commentator for a Masters golf sweepstake among friends '
         'called "The Guinness Storehouse". Each entrant picked 3 golfers '
-        '\u2014 lowest combined score wins.'
+        '\u2014 lowest combined score wins.\n\n'
+        'Golf scoring reference (IMPORTANT):\n'
+        '- Scores are relative to par. Negative is good, positive is bad.\n'
+        '- "Under par" / "in the red" = negative score (e.g. -3). GOOD.\n'
+        '- "Over par" / "in the black" = positive score (e.g. +2). BAD.\n'
+        '- "Even" (E) = exactly par. Neither good nor bad.\n'
+        '- "Even or better" means E or any negative number ONLY.\n'
+        '- +1, +2, +3 etc. are WORSE than even, not "at or better than even".'
     )
 
     if is_first:
@@ -649,18 +656,24 @@ def generate_ai_commentary(rows, ranks, history, predictions,
     # Fact-check the generated commentary against the raw data
     verify_prompt = (
         f"You are a fact-checker. Here is the data:\n\n{standings}{pred_line}"
-        f"\n\nHere is a commentary written about this data:\n\"{text}\"\n\n"
+        f"\n\nGolf scoring: negative is GOOD, positive is BAD. "
+        f"'Even or better' means E or negative ONLY. "
+        f"+1, +2, etc. are OVER par (worse than even).\n\n"
+        f"Here is a commentary written about this data:\n\"{text}\"\n\n"
         "Check ONLY for hard factual errors:\n"
         "- Wrong scores (e.g. saying a player is -3 when they are +2)\n"
         "- Wrong rankings or positions\n"
         "- Wrong player-to-entrant assignments\n"
-        "- Wrong counts or quantities (e.g. saying 'three players' when "
-        "it's actually two \u2014 count carefully against the data)\n"
+        "- Wrong counts or quantities (e.g. saying 'three players at even "
+        "or better' when only two are \u2014 count VERY carefully against the "
+        "data, checking each player's individual score)\n"
         "- Misuse of golf terminology (e.g. calling a bad score an 'albatross')\n\n"
         "Do NOT flag:\n"
         "- Figurative language, hyperbole, humour, or rhetorical phrases\n"
         "- Subjective opinions like 'MVP', 'heavy lifting', 'best pick'\n"
-        "- Nicknames or informal references to players\n\n"
+        "- Nicknames or informal references to players\n"
+        "- Relative references like 'other two picks' (meaning the 2 picks "
+        "besides the one being discussed \u2014 every entrant has 3 picks)\n\n"
         "Only FAIL if a concrete number, score, ranking, count, or "
         "player-entrant link is demonstrably wrong.\n\n"
         "First, briefly verify each factual claim in the commentary against "
@@ -1126,7 +1139,7 @@ def render_html(rows, out_path, updated_at, deltas, predictions=None, commentary
   <div class="header">
     <img class="banner" src="banner.jpg" alt="">
     <h1>The Guinness Storehouse LIVE STANDINGS</h1>
-    <div class="meta">Updated {esc(updated_str)} · <span class="rel-time" data-iso="{esc(updated_iso)}">just now</span> · refreshes every 5 min</div>
+    <div class="meta">Updated {esc(updated_str)} · <span class="rel-time" data-iso="{esc(updated_iso)}">just now</span></div>
   </div>
   {comm_section}
   <div class="table-wrap">
@@ -1161,6 +1174,21 @@ def render_html(rows, out_path, updated_at, deltas, predictions=None, commentary
   }}
   render();
   setInterval(render, 30000);
+}})();
+
+// Auto-refresh: bypass CDN cache every 5 min
+(function () {{
+  var iso = document.querySelector('.rel-time');
+  if (!iso) return;
+  setInterval(function () {{
+    fetch(location.href.split('?')[0] + '?_t=' + Date.now(), {{cache: 'no-store'}})
+      .then(function (r) {{ return r.text(); }})
+      .then(function (html) {{
+        var m = html.match(/data-iso="([^"]+)"/);
+        if (m && m[1] !== iso.dataset.iso) location.reload();
+      }})
+      .catch(function () {{}});
+  }}, 300000);
 }})();
 </script>
 </body>
