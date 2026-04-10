@@ -27,7 +27,7 @@ ENTRANTS_PATH = "entrants.json"
 SITE_URL = "https://chillok.github.io/masters-tracker"
 BANNER_SRC = "banner.jpg"
 HISTORY_FILENAME = "history.json"
-HISTORY_WINDOW_MIN = 90       # trim snapshots older than this
+HISTORY_WINDOW_MIN = 7200     # keep snapshots for the full tournament (~5 days)
 DELTA_TARGET_AGE_MIN = 30     # preferred age of reference snapshot for rank-delta arrow
 DELTA_MAX_AGE_MIN = 90        # ignore snapshots older than this when picking a reference
 DUBLIN = ZoneInfo("Europe/Dublin")
@@ -299,15 +299,30 @@ def compute_deltas(history, current_ranks, now):
 
 
 def save_history(history, current_ranks, now, out_path, current_scores=None):
-    """Append the current snapshot, trim old ones, write to out_path."""
+    """Append the current snapshot, trim old ones, write to out_path.
+
+    Keeps all snapshots from the last 2 hours (for delta arrows / commentary),
+    but thins older snapshots to one per 30 minutes to avoid bloat.
+    """
     cutoff = now.timestamp() - HISTORY_WINDOW_MIN * 60
+    recent_cutoff = now.timestamp() - 120 * 60  # 2 hours
     trimmed = []
+    last_kept_ts = 0
     for snap in history:
         try:
-            if _parse_iso(snap["ts"]).timestamp() >= cutoff:
-                trimmed.append(snap)
+            snap_ts = _parse_iso(snap["ts"]).timestamp()
         except (KeyError, ValueError):
             continue
+        if snap_ts < cutoff:
+            continue
+        if snap_ts >= recent_cutoff:
+            # Keep all recent snapshots
+            trimmed.append(snap)
+        else:
+            # Older: keep one per 30 minutes
+            if snap_ts - last_kept_ts >= 1800:
+                trimmed.append(snap)
+                last_kept_ts = snap_ts
     snap = {
         "ts": now.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
         "ranks": current_ranks,
@@ -318,6 +333,54 @@ def save_history(history, current_ranks, now, out_path, current_scores=None):
     os.makedirs(os.path.dirname(out_path) or ".", exist_ok=True)
     with open(out_path, "w") as f:
         json.dump({"snapshots": trimmed}, f, indent=2)
+
+
+def build_trajectory_summary(history, current_ranks, current_scores):
+    """Summarise each entrant's journey from the earliest snapshot to now.
+
+    Returns a string like:
+      Flavin: started 3rd (E) → now 1st (-4), improved 4 shots
+      Noel: started 1st (-1) → now 5th (+2), dropped 3 shots
+    """
+    if not history:
+        return ""
+    # Find the earliest snapshot that has scores
+    earliest = None
+    for snap in history:
+        if "scores" in snap:
+            earliest = snap
+            break
+    if not earliest:
+        return ""
+    early_scores = earliest.get("scores", {})
+    early_ranks = earliest.get("ranks", {})
+    if not early_scores:
+        return ""
+    lines = []
+    for name in sorted(current_ranks, key=lambda n: current_ranks[n]):
+        cr = current_ranks[name]
+        cs = current_scores.get(name)
+        er = early_ranks.get(name)
+        es = early_scores.get(name)
+        if cs is None or es is None:
+            continue
+        diff = cs - es
+        if diff == 0 and cr == er:
+            continue  # no change, skip
+        direction = f"improved {abs(diff)} shots" if diff < 0 else (
+            f"dropped {abs(diff)} shots" if diff > 0 else "same score")
+        rank_move = ""
+        if er and er != cr:
+            rank_move = f" {_ordinal(er)} → {_ordinal(cr)},"
+        lines.append(
+            f"  {name}:{rank_move} was {fmt_total(es)} now {fmt_total(cs)}"
+            f" ({direction})")
+    if not lines:
+        return ""
+    return (
+        "\n\nFORM TRACKER (how entrants have progressed since R1 started):\n"
+        + "\n".join(lines)
+    )
 
 
 COMMENTARY_RESET = False
@@ -510,7 +573,7 @@ def generate_commentary(rows, ranks, history, now):
 
 
 def _build_standings_prompt(rows, ranks, prev_ranks, prev_scores, predictions,
-                            existing_commentary, model=None):
+                            existing_commentary, model=None, history=None):
     """Build the structured data block for the AI commentary prompt."""
     current_scores = {name: total for name, _, total in rows}
     lines = []
@@ -635,7 +698,13 @@ def _build_standings_prompt(rows, ranks, prev_ranks, prev_scores, predictions,
                 "or talk about someone else entirely."
             )
 
-    return standings, pred_line, prev_lines
+    # Add trajectory summary (~30% of the time to avoid repetition)
+    trajectory = ""
+    if history and random.randint(1, 3) == 1:
+        current_scores = {name: total for name, _, total in rows}
+        trajectory = build_trajectory_summary(history, ranks, current_scores)
+
+    return standings + trajectory, pred_line, prev_lines
 
 
 def _call_haiku(api_key, prompt, max_tokens=120):
@@ -1014,7 +1083,7 @@ def generate_ai_commentary(rows, ranks, history, predictions,
 
     standings, pred_line, prev_lines = _build_standings_prompt(
         rows, ranks, prev_ranks, prev_scores, predictions,
-        existing_commentary, model=model,
+        existing_commentary, model=model, history=history,
     )
 
     preamble = (
