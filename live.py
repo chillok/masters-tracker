@@ -9,7 +9,7 @@ Usage:
 """
 import re, json, urllib.request, sys, subprocess, os, shutil, html as html_mod, csv, random, math
 from collections import Counter
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from zoneinfo import ZoneInfo
 
 # entrants.json name → BBC leaderboard fullName
@@ -747,6 +747,76 @@ def generate_michael_view(rows, ranks, predictions, prev_michael=None,
     return text
 
 
+MULLANE_IMG = "john_mullane.jpg"
+
+
+def generate_mullane_view(rows, ranks, predictions, michael_text=None,
+                          api_key=None):
+    """Generate a 'Mullane's Take' rebuttal to Michael Ryan's commentary."""
+    if not api_key:
+        api_key = os.environ.get("ANTHROPIC_API_KEY")
+    if not api_key:
+        return None
+
+    standings_lines = []
+    for name, scores, total in rows:
+        golfers = ", ".join(f"{p} ({fmt_total(s)})" for p, s, _, _ in scores
+                            if s is not None)
+        standings_lines.append(
+            f"  {name} {fmt_total(total)} — picks: {golfers}")
+    standings = "\n".join(standings_lines)
+
+    character = (
+        "You are John Mullane from Waterford city, Ireland. You are a "
+        "legendary Waterford hurler and De La Salle man. You're now an "
+        "RTE pundit known for being passionate, fiery, and emotional.\n\n"
+        "Your speech patterns (WATERFORD CITY through and through):\n"
+        "- 'boy' and 'biy' constantly — end of sentences, mid-sentence, "
+        "everywhere. It's your signature.\n"
+        "- 'like' as a filler everywhere\n"
+        "- 'I'll tell ya boy', 'listen here boy', 'come on boy'\n"
+        "- 'fierce', 'savage', 'unreal' as intensifiers\n"
+        "- Fast, animated, passionate delivery. Short punchy sentences.\n"
+        "- You get EMOTIONAL about picks. You take it personally.\n"
+        "- References: Walsh Park, the Quay, De La Salle, the Déise\n"
+        "- You relate everything to hurling — golfers are like hurlers, "
+        "scores are like championship results\n"
+        "- You are the OPPOSITE of Michael Ryan. He's measured and deadpan; "
+        "you're animated and passionate. He's country; you're city.\n"
+        "- You fundamentally disagree with Michael's analysis. Whatever "
+        "he praised, you question. Whatever he dismissed, you defend. "
+        "You think his GAA analogies are wrong.\n"
+        "- Occasionally misspell a golfer's name or get golf terms "
+        "confidently wrong, like a man who only watches hurling.\n"
+    )
+
+    if michael_text:
+        task = (
+            f"\nMichael Ryan just said this:\n\"{michael_text}\"\n"
+            f"\nCurrent standings:\n{standings}\n\n"
+            "Respond to Michael BY NAME — call him out directly "
+            "(e.g. 'Ah here Michael boy', 'Michael's wrong on this one boy', "
+            "'I'll tell ya Michael'). Make it clear you're responding to him. "
+            "Disagree with his key points — contradict his assessment, "
+            "back different entrants, question his analogies. Be passionate. "
+            "2-3 SHORT paragraphs, max 100 words total. Tight. Punchy. "
+            "Do NOT use quotation marks around the whole thing."
+        )
+    else:
+        task = (
+            f"\nHere are the current standings in a Masters golf sweepstake:\n"
+            f"{standings}\n\n"
+            "Give your take as John Mullane. Be passionate, pick a "
+            "different angle to the obvious one. Back an underdog. "
+            "2-3 SHORT paragraphs, max 100 words total. Tight. Punchy. "
+            "Do NOT use quotation marks around the whole thing."
+        )
+
+    prompt = character + task
+    text = _call_haiku(api_key, prompt, max_tokens=200)
+    return text
+
+
 def generate_ai_commentary(rows, ranks, history, predictions,
                            existing_commentary, is_first=False,
                            tournament_progress=None):
@@ -1104,17 +1174,32 @@ def render_html(rows, out_path, updated_at, deltas, predictions=None, commentary
             text = entry.get("text", "")
             if entry.get("type") == "michael":
                 comm_entries.append(
-                    f'<div class="comm-entry michael-entry">'
+                    f'<div class="comm-entry guest-entry michael-entry">'
                     f'<span class="comm-time">{esc(time_str)}</span>'
                     f'<div class="comm-text">'
-                    f'<div class="michael-banner">'
-                    f'<img src="{MICHAEL_RYAN_IMG}" class="michael-img" '
+                    f'<div class="guest-banner">'
+                    f'<img src="{MICHAEL_RYAN_IMG}" class="guest-img michael-border" '
                     f'alt="Michael Ryan">'
-                    f'<div class="michael-name-block">'
-                    f'<span class="michael-label">Michael\'s View</span>'
-                    f'<span class="michael-subtitle">Thoughts from the Nire Valley</span>'
+                    f'<div class="guest-name-block">'
+                    f'<span class="guest-label michael-color">Michael\'s View</span>'
+                    f'<span class="guest-subtitle">Thoughts from the Nire Valley</span>'
                     f'</div></div>'
-                    f'<span class="michael-text">{esc(text)}</span>'
+                    f'<span class="guest-text">{esc(text)}</span>'
+                    f'</div></div>'
+                )
+            elif entry.get("type") == "mullane":
+                comm_entries.append(
+                    f'<div class="comm-entry guest-entry mullane-entry">'
+                    f'<span class="comm-time">{esc(time_str)}</span>'
+                    f'<div class="comm-text">'
+                    f'<div class="guest-banner">'
+                    f'<img src="{MULLANE_IMG}" class="guest-img mullane-border" '
+                    f'alt="John Mullane">'
+                    f'<div class="guest-name-block">'
+                    f'<span class="guest-label mullane-color">Mullane\'s Take</span>'
+                    f'<span class="guest-subtitle">The View from the Quay</span>'
+                    f'</div></div>'
+                    f'<span class="guest-text">{esc(text)}</span>'
                     f'</div></div>'
                 )
             else:
@@ -1373,42 +1458,43 @@ def render_html(rows, out_path, updated_at, deltas, predictions=None, commentary
     font-size: .75rem;
     padding-top: .05rem;
   }}
-  .michael-entry {{
-  }}
-  .michael-banner {{
+  .guest-banner {{
     display: flex;
     align-items: center;
     gap: .5rem;
     margin-bottom: .4rem;
   }}
-  .michael-img {{
+  .guest-img {{
     width: 80px;
     height: 80px;
     border-radius: 50%;
     object-fit: cover;
   }}
-  .michael-name-block {{
+  .guest-name-block {{
     display: flex;
     flex-direction: column;
   }}
-  .michael-label {{
-    font-family: 'Brush Script MT', 'Segoe Script', 'Apple Chancery', cursive;
-    font-size: 2.2rem;
-    font-weight: 400;
-    color: #1a3f7a;
+  .guest-label {{
+    font-family: Georgia, 'Times New Roman', serif;
+    font-size: 1.4rem;
+    font-weight: 700;
+    font-style: italic;
     line-height: 1.1;
   }}
-  .michael-subtitle {{
+  .guest-subtitle {{
     font-size: .7rem;
     color: var(--muted);
     font-style: italic;
     letter-spacing: .03em;
   }}
-  .michael-text {{
+  .guest-text {{
     display: block;
     white-space: pre-line;
     color: var(--dark);
   }}
+  .guest-entry .comm-text {{ color: var(--dark) !important; }}
+  .michael-color {{ color: #1a3f7a; }}
+  .mullane-color {{ color: #8b1a1a; }}
   @media (max-width: 640px) {{
     body {{ padding: 1rem .5rem; font-size: 14px; }}
     h1 {{ font-size: 1.1rem; }}
@@ -1580,9 +1666,11 @@ def main():
         commentary = load_commentary()
         ts = now.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
-        # Separate Michael's View entries from regular commentary
+        # Separate guest entries from regular commentary
         michael_entries = [e for e in commentary if e.get("type") == "michael"]
-        regular = [e for e in commentary if e.get("type") != "michael"]
+        mullane_entries = [e for e in commentary if e.get("type") == "mullane"]
+        regular = [e for e in commentary
+                   if e.get("type") not in ("michael", "mullane")]
 
         def _regenerate_michael():
             """Generate a fresh Michael's View (delta from previous)."""
@@ -1601,11 +1689,27 @@ def main():
             )
             if text:
                 return [{"ts": ts, "text": text, "type": "michael"}]
-            return michael_entries  # keep old one if generation fails
+            return michael_entries
 
-        # Refresh Michael's View ~1 in every MICHAEL_FREQUENCY builds
-        if random.randint(1, MICHAEL_FREQUENCY) == 1 or not michael_entries:
-            michael_entries = _regenerate_michael()
+        def _regenerate_pair():
+            """Generate Michael + Mullane as a pair. Mullane reacts to Michael."""
+            m_entries = _regenerate_michael()
+            m_text = m_entries[0]["text"] if m_entries else None
+            mul_text = generate_mullane_view(
+                rows, ranks, predictions, michael_text=m_text,
+            )
+            # Mullane gets timestamp 1s after Michael so he sorts right below
+            mul = []
+            if mul_text:
+                mul_ts = (now.astimezone(timezone.utc)
+                          + timedelta(seconds=1)
+                          ).strftime("%Y-%m-%dT%H:%M:%SZ")
+                mul = [{"ts": mul_ts, "text": mul_text, "type": "mullane"}]
+            return m_entries, mul or mullane_entries
+
+        # Refresh the pair ~1 in MICHAEL_FREQUENCY builds
+        if random.randint(1, MICHAEL_FREQUENCY) == 1 or not michael_entries or not mullane_entries:
+            michael_entries, mullane_entries = _regenerate_pair()
 
         # Try AI commentary for live changes
         entry = generate_ai_commentary(
@@ -1623,18 +1727,24 @@ def main():
             if fresh:
                 regular = [{"ts": ts, "text": fresh}] + regular[1:]
 
-        # Merge by timestamp, trim, then guarantee michael is always present
-        commentary = michael_entries + regular
+        # Merge: guests always kept, regular fills remaining slots
+        guest_entries = michael_entries[:1] + mullane_entries[:1]
+        max_regular = COMMENTARY_MAX - len(guest_entries)
+        regular = regular[:max_regular]
+        commentary = guest_entries + regular
         commentary.sort(key=lambda e: e.get("ts", ""), reverse=True)
-        commentary = commentary[:COMMENTARY_MAX]
 
-        # If michael got pushed off the bottom, regenerate and swap out oldest
-        if not any(e.get("type") == "michael" for e in commentary):
-            michael_entries = _regenerate_michael()
-            if michael_entries:
-                # Drop the oldest regular entry to make room
-                commentary = commentary[:COMMENTARY_MAX - 1] + michael_entries
-                commentary.sort(key=lambda e: e.get("ts", ""), reverse=True)
+        # Guarantee the pair — if either is missing, regenerate both
+        has_michael = any(e.get("type") == "michael" for e in commentary)
+        has_mullane = any(e.get("type") == "mullane" for e in commentary)
+        if not has_michael or not has_mullane:
+            michael_entries, mullane_entries = _regenerate_pair()
+            guest_entries = michael_entries[:1] + mullane_entries[:1]
+            regular_only = [e for e in commentary
+                            if e.get("type") not in ("michael", "mullane")]
+            regular_only = regular_only[:COMMENTARY_MAX - len(guest_entries)]
+            commentary = guest_entries + regular_only
+            commentary.sort(key=lambda e: e.get("ts", ""), reverse=True)
 
         save_commentary(commentary, os.path.join("_site", COMMENTARY_FILENAME))
 
@@ -1649,6 +1759,8 @@ def main():
             print(f"Warning: {BANNER_SRC} not found; site banner will be missing")
         if os.path.exists(MICHAEL_RYAN_IMG):
             shutil.copy(MICHAEL_RYAN_IMG, os.path.join("_site", MICHAEL_RYAN_IMG))
+        if os.path.exists(MULLANE_IMG):
+            shutil.copy(MULLANE_IMG, os.path.join("_site", MULLANE_IMG))
 
         print("\nWrote _site/index.html, _site/standings.png, _site/history.json, _site/banner.jpg")
 
