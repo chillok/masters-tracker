@@ -654,14 +654,21 @@ def generate_ai_commentary(rows, ranks, history, predictions,
         "- Wrong scores (e.g. saying a player is -3 when they are +2)\n"
         "- Wrong rankings or positions\n"
         "- Wrong player-to-entrant assignments\n"
+        "- Wrong counts or quantities (e.g. saying 'three players' when "
+        "it's actually two \u2014 count carefully against the data)\n"
         "- Misuse of golf terminology (e.g. calling a bad score an 'albatross')\n\n"
-        "Do NOT flag figurative language, hyperbole, humour, or rhetorical "
-        "phrases like 'carrying single-handedly' \u2014 these are fine.\n\n"
-        "Reply with ONLY the word PASS if there are no hard factual errors, "
-        "or FAIL followed by a brief explanation."
+        "Do NOT flag:\n"
+        "- Figurative language, hyperbole, humour, or rhetorical phrases\n"
+        "- Subjective opinions like 'MVP', 'heavy lifting', 'best pick'\n"
+        "- Nicknames or informal references to players\n\n"
+        "Only FAIL if a concrete number, score, ranking, count, or "
+        "player-entrant link is demonstrably wrong.\n\n"
+        "First, briefly verify each factual claim in the commentary against "
+        "the data. Then on a NEW line write your final verdict: either "
+        "VERDICT: PASS or VERDICT: FAIL with a brief reason."
     )
-    verdict = _call_haiku(api_key, verify_prompt, max_tokens=80)
-    if not verdict or not verdict.upper().startswith("PASS"):
+    verdict = _call_haiku(api_key, verify_prompt, max_tokens=600)
+    if not verdict or "VERDICT: PASS" not in verdict.upper():
         print(f"AI commentary failed fact-check ({verdict}), "
               "falling back to templates")
         return None
