@@ -748,7 +748,8 @@ def generate_michael_view(rows, ranks, predictions, prev_michael=None,
 
 
 def generate_ai_commentary(rows, ranks, history, predictions,
-                           existing_commentary, is_first=False):
+                           existing_commentary, is_first=False,
+                           tournament_progress=None):
     """Use Claude to generate natural commentary. Returns str or None."""
     api_key = os.environ.get("ANTHROPIC_API_KEY")
     if not api_key:
@@ -834,12 +835,11 @@ def generate_ai_commentary(rows, ranks, history, predictions,
         "lighthearted, a bit of dry humour, but not cheesy. "
         "No exclamation marks. No hashtags or emojis. "
         "Be specific \u2014 use real names and numbers.\n\n"
-        "IMPORTANT: The Masters is 4 rounds (72 holes). We are still "
-        "early in the tournament \u2014 nothing is decided yet. Do NOT use "
-        "language like 'runaway', 'lock', 'untouchable', 'insurmountable' "
-        "or treat small leads as decisive. A 3-shot lead after R1 is "
-        "nothing \u2014 remind people there's plenty of golf left. Keep "
-        "perspective.\n\n"
+        f"IMPORTANT: The Masters is 4 rounds (72 holes). "
+        f"Current progress: {tournament_progress or 'unknown'}. "
+        "Do NOT use language like 'runaway', 'lock', 'untouchable', "
+        "'insurmountable' or treat leads as decisive unless we are "
+        "deep into R4. Keep perspective on how much golf is left.\n\n"
         "Subtle running jokes you MAY weave in, but ONLY about 25% of "
         "the time each \u2014 most updates should have NO bias at all:\n"
         "- Gentle digs at Noel Smyth (underperforming, questionable picks, etc.)\n"
@@ -1522,6 +1522,21 @@ def main():
         for p in participants
     }
 
+    # Compute tournament progress from roundScores + thru
+    total_holes = 0
+    for p in participants:
+        completed_rounds = len(p.get("roundScores", []))
+        thru_val = p["thru"]["value"].strip()
+        current_thru = int(thru_val) if thru_val.isdigit() else 0
+        total_holes += completed_rounds * 18 + current_thru
+    avg_holes = total_holes / len(participants) if participants else 0
+    current_round = int(avg_holes // 18) + 1
+    round_progress = avg_holes % 18
+    tournament_progress = (
+        f"Round {min(current_round, 4)} of 4"
+        f" ({avg_holes:.0f} of 72 holes played on average)"
+    )
+
     with open(ENTRANTS_PATH) as f:
         edata = json.load(f)
     all_entrants = edata["entrants"] + edata.get("unknown_entrants", [])
@@ -1595,6 +1610,7 @@ def main():
         # Try AI commentary for live changes
         entry = generate_ai_commentary(
             rows, ranks, history, predictions, regular,
+            tournament_progress=tournament_progress,
         )
         if entry:
             regular = [{"ts": ts, "text": entry}] + regular
@@ -1602,6 +1618,7 @@ def main():
         else:
             fresh = generate_ai_commentary(
                 rows, ranks, history, predictions, regular, is_first=True,
+                tournament_progress=tournament_progress,
             )
             if fresh:
                 regular = [{"ts": ts, "text": fresh}] + regular[1:]
