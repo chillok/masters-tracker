@@ -896,12 +896,19 @@ def generate_hackett_view(rows, ranks, predictions, prev_hackett=None,
 
     character += (
         "\n" + ENTRANT_BIOS
-        + "Work in sly puns referencing entrants' jobs, nicknames, or "
-        "interests — but never explain the joke. Weave it into your "
-        "convoluted reasoning. E.g. 'Seward's picks should be under "
-        "investigation', 'Noel's squad has no fitness', 'Flavin can't "
-        "prescribe a cure for those picks', 'Connery's harvest is "
-        "looking bare'. The pun should land casually mid-tangent.\n"
+        + "Work in sly puns referencing entrants' personal info — but "
+        "NEVER state someone's job or role directly (don't say 'the guard', "
+        "'the farmer', 'the nurse'). Instead let the reference land as "
+        "wordplay buried in natural commentary. Vary which entrant you "
+        "target each time — don't always go for the same person.\n"
+        "Examples of GOOD subtle puns (use different ones each time):\n"
+        "- 'Cillian's picks are pulling up lame again'\n"
+        "- 'the Connery brothers have backed the wrong horse'\n"
+        "- 'Tobin would've picked better himself, or so he'd tell you'\n"
+        "- 'Noel's wobbling worse than a Saturday night'\n"
+        "- 'Barry should know the answer to that one'\n"
+        "- 'Flembomb's gone off early'\n"
+        "The pun should land casually mid-tangent, never explained.\n"
     )
 
     # Tournament calibration
@@ -1052,11 +1059,19 @@ def generate_ai_commentary(rows, ranks, history, predictions,
         "- Quietly optimistic spin on Barry Dunne even when he's clearly struggling\n"
         "Keep digs wry and comic, not genuinely mean-spirited.\n\n"
         + ENTRANT_BIOS
-        + "Use this info for sly puns and wordplay — don't state facts "
-        "directly ('Seward is a guard'), instead weave them in as puns "
-        "('Seward's picks should be arrested', 'Noel's squad has no "
-        "fitness', 'Flavin can't prescribe a cure for those picks', "
-        "'Connery's harvest is looking bare'). Never explain the joke."
+        + "Use this info for sly puns and wordplay. NEVER state someone's "
+        "job or role directly — don't say 'the guard', 'the farmer', "
+        "'the nurse', 'the physio'. Let the reference land as wordplay "
+        "buried in natural commentary. Vary which entrant you target — "
+        "don't keep going for the same person.\n"
+        "Examples (use different ones, these are just inspiration):\n"
+        "- 'the Connerys have backed the wrong horse again'\n"
+        "- 'Tobin reckons he'd have picked better himself'\n"
+        "- 'Cillian's hamstrings aren't the only thing giving out'\n"
+        "- 'Noel's cruising but his picks have stalled'\n"
+        "- 'Flembomb's detonated in the wrong direction'\n"
+        "- 'Nurse Allen needs a second opinion on those picks'\n"
+        "Never explain the joke."
     )
 
     accuracy = (
