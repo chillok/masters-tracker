@@ -685,7 +685,7 @@ def _build_standings_prompt(rows, ranks, prev_ranks, prev_scores, predictions,
     if existing_commentary:
         # Show ALL active entries so the LLM can avoid repetition
         texts = [e["text"] for e in existing_commentary
-                 if e.get("type") not in ("michael", "mullane")]
+                 if e.get("type") != "hackett"]
         if texts:
             prev_lines = (
                 "\n\nALL active commentary on the page right now "
@@ -739,10 +739,9 @@ def _call_haiku(api_key, prompt, max_tokens=120):
         return None
 
 
-MICHAEL_RYAN_IMG = "michael_ryan.jpg"
+DICK_HACKETT_IMG = "dick_hackett.jpg"
 
-
-MICHAEL_FREQUENCY = 8  # generate roughly 1 in every N builds
+GUEST_FREQUENCY = 8  # generate roughly 1 in every N builds
 
 # Personal info on entrants — used in all commentary prompts for colour
 ENTRANT_BIOS = (
@@ -764,21 +763,8 @@ ENTRANT_BIOS = (
 )
 
 
-def generate_michael_view(rows, ranks, predictions, prev_michael=None,
-                          prev_scores=None, api_key=None,
-                          tournament_progress=None, model=None):
-    """Generate a 'Michael's View' guest commentary in the style of
-    Michael Ryan from the Nire Valley — deep Comeragh mountains accent,
-    GAA manager who relates everything back to hurling and football.
-
-    If prev_michael/prev_scores are provided, the prompt focuses on
-    the most significant changes since Michael last spoke.
-    """
-    if not api_key:
-        api_key = os.environ.get("ANTHROPIC_API_KEY")
-    if not api_key:
-        return None
-
+def _build_guest_standings(rows, model=None):
+    """Build enriched standings lines for guest commentators."""
     standings_lines = []
     for name, scores, total in rows:
         golfer_parts = []
@@ -808,14 +794,27 @@ def generate_michael_view(rows, ranks, predictions, prev_michael=None,
         golfers = ", ".join(golfer_parts)
         standings_lines.append(
             f"  {name} {fmt_total(total)} — picks: {golfers}")
-    standings = "\n".join(standings_lines)
+    return "\n".join(standings_lines)
+
+
+def generate_hackett_view(rows, ranks, predictions, prev_hackett=None,
+                          prev_scores=None, api_key=None,
+                          tournament_progress=None, model=None):
+    """Generate 'Dick Hackett's Alternate Angle' — convoluted, earnest,
+    circular logic from a West Waterford auctioneer and GAA club man.
+    """
+    if not api_key:
+        api_key = os.environ.get("ANTHROPIC_API_KEY")
+    if not api_key:
+        return None
+
+    standings = _build_guest_standings(rows, model)
 
     # Build a changes block if we have previous data
     changes_block = ""
     if prev_scores:
         current_scores = {name: total for name, _, total in rows}
         prev_ranks_map = {}
-        # Derive previous ranks from prev_scores (sorted by score)
         sorted_prev = sorted(prev_scores.items(), key=lambda x: x[1])
         r = 0
         last_sc = None
@@ -840,146 +839,60 @@ def generate_michael_view(rows, ranks, predictions, prev_michael=None,
                     f"({direction} {abs(d)}){rank_move}")
         if changes:
             changes_block = (
-                "\n\nKEY CHANGES since your last update:\n"
+                "\n\nKEY CHANGES since your last column:\n"
                 + "\n".join(changes)
-                + "\n\nFocus on these changes — what moved, who's rising, "
-                "who's falling apart. Don't rehash the full standings."
             )
 
     character = (
-        "You are Michael Ryan from the Nire Valley in the Comeragh Mountains, "
-        "County Waterford, Ireland. You managed the Waterford senior ladies "
-        "football team for 20 years and the Waterford hurlers. You have an "
-        "extremely thick rural Waterford/Comeragh accent.\n\n"
-        "Your speech patterns (DEEP RURAL, not Waterford city):\n"
-        "- 'de' instead of 'the', 't'ing' for 'thing'\n"
-        "- 'sure look', 'now in fairness', 'I'll be honest wit ye', "
-        "'I'll tell ye'\n"
-        "- 'fierce' as an intensifier\n"
-        "- 'nuttin' for 'nothing', 'wit' for 'with', 'dat' for 'that'\n"
-        "- 'dere' for 'there', 'dem' for 'them', 'tis' for 'it is'\n"
-        "- DO NOT use 'boy' or 'biy' — that's Waterford CITY, not country\n"
-        "- Slow, deliberate, measured delivery. Lots of pauses. "
-        "Sentences trail off with 'like' or 'so'.\n"
-        "- 'ah sure' to start thoughts, 'do you know' as a filler\n"
-        "- You constantly relate golf to GAA — comparing picks to "
-        "team selection, golfers to hurlers/footballers, scores to "
-        "match results\n"
-        "- Reference Waterford GAA landmarks: Fraher Field, Walsh Park, "
-        "Colligan, the Nire, the Comeraghs\n"
-        "- Raw, country, no-nonsense. Sounds like a man leaning on a "
-        "gate in the Comeraghs giving you his assessment.\n"
-        "- VERY dry and drole. Understated. Deadpan. Doesn't labour "
-        "the joke — just states things plainly and lets the humour land. "
-        "Short sentences. Doesn't over-explain.\n"
-        "- You don't really know golf terminology. You call it 'de golf' "
-        "and talk about players like they're on a county panel.\n"
-        "- Occasionally misspell a golfer's name in a believable way "
-        "(e.g. 'Sheffler', 'Kittayama', 'McElroy') — not every name, "
-        "just one now and then, like a man who heard it on the radio.\n"
-        "- Sometimes get golf terms confidently wrong or mix them up "
-        "(e.g. 'he birdied de par' or 'a fierce bogey on de back seven' "
-        "or calling the green 'de pitch'). Keep it deadpan — never "
-        "acknowledge you might be wrong.\n\n"
-        "DIGS: If anyone's picks are struggling, slag them for it — "
-        "compare bad picks to useless county players, lads who should "
-        "have been dropped years ago, etc. Be extra harsh on:\n"
-        "- Jonathan Flavin — boring picks, no imagination, like picking "
-        "de same lads for de panel every year\n"
-        "- P\u00e1draig Connery — cursed, everything goes wrong, like a team "
-        "dat can't buy a win in Munster\n"
-        "- Noel Smyth — clueless, picks like a man who never watched "
-        "a match in his life\n"
+        "You are Dick Hackett from West Waterford, Ireland. You are an "
+        "auctioneer based in Cork and deeply involved in your local GAA "
+        "club. You are famous for your confusing, alternate views on "
+        "everything.\n\n"
+        "Your defining trait — CONVOLUTED LOGIC:\n"
+        "- You start with a seemingly reasonable point, then get tangled "
+        "in qualifications, tangents, and circular reasoning\n"
+        "- You often end up contradicting or undermining your own thesis "
+        "without ever noticing\n"
+        "- You use phrases like 'now look it', 'the thing about it is', "
+        "'you'd have to say', 'in fairness', 'having said that', "
+        "'but then again', 'I could be wrong now but I don't think I am'\n"
+        "- Your speech is West Waterford / East Cork — conversational, "
+        "meandering, slightly more polished than deep rural but still "
+        "country at heart\n"
+        "- You are NOT fiery or passionate — you are earnest, thoughtful, "
+        "and genuinely believe you are making excellent points even as "
+        "they collapse around you\n"
+        "- Auctioneer habits bleed in — you describe golfers or picks "
+        "like you're selling a property ('great potential, needs some work', "
+        "'south-facing with views of the leaderboard', 'a fixer-upper')\n"
+        "- GAA club references — committee meetings, underage structures, "
+        "club AGMs, fixtures schedules\n"
+        "- You hedge everything: 'arguably', 'in a manner of speaking', "
+        "'if you look at it a certain way'\n"
+        "- You sometimes trail off with 'Or maybe it isn't', 'Well, maybe "
+        "not', 'I think. Well.' at the end\n"
+        "- Your conclusions are NEVER the obvious one. You find alternate "
+        "angles that might or might not make sense. Sometimes they're "
+        "accidentally brilliant, sometimes they're nonsense.\n\n"
+        "DIGS: Work in sly digs at entrants whose picks are struggling. "
+        "Be extra harsh on:\n"
+        "- Jonathan Flavin — boring, predictable picks. Like a property "
+        "with no character.\n"
+        "- P\u00e1draig Connery — cursed. Everything goes wrong. Like a site "
+        "with planning issues.\n"
+        "- Noel Smyth — clueless, picked like a man bidding on a house "
+        "he's never viewed.\n"
     )
 
     character += (
         "\n" + ENTRANT_BIOS
-        + "You MUST work in at least one pun or play on words referencing "
-        "an entrant's job, nickname, or interests. Don't state the fact "
-        "directly — make it a sly pun woven into de commentary. "
-        "E.g. 'Seward's picks are under investigation', 'Noel's squad has "
-        "no fitness left in dem', 'Flavin dispensin' pain relief to nobody', "
-        "'Connery's harvest is lookin' bare dis year'. Deadpan delivery — "
-        "never explain de joke.\n"
+        + "Work in sly puns referencing entrants' jobs, nicknames, or "
+        "interests — but never explain the joke. Weave it into your "
+        "convoluted reasoning. E.g. 'Seward's picks should be under "
+        "investigation', 'Noel's squad has no fitness', 'Flavin can't "
+        "prescribe a cure for those picks', 'Connery's harvest is "
+        "looking bare'. The pun should land casually mid-tangent.\n"
     )
-
-    # Tournament calibration — prevent overstating leads early on
-    progress_note = ""
-    if tournament_progress:
-        progress_note = (
-            f"\n\nIMPORTANT: {tournament_progress}. "
-            "Do NOT overstate any lead or declare anyone 'running away with it' "
-            "— a one or two shot lead this early means nothing. Keep perspective."
-        )
-
-    if prev_michael and changes_block:
-        task = (
-            f"\nYour previous commentary was:\n\"{prev_michael}\"\n"
-            f"\nCurrent standings:\n{standings}"
-            f"{changes_block}\n\n"
-            "Give your updated take. React to the biggest changes — "
-            "who's moved, who's collapsed, any new storyline. "
-            "Don't repeat your previous points. "
-            "2-3 SHORT paragraphs, max 100 words total. Tight. No waffle. "
-            "Do NOT use quotation marks around the whole thing."
-        )
-    else:
-        task = (
-            f"\nHere are the current standings in a Masters golf sweepstake:\n"
-            f"{standings}\n\n"
-            "Give your analysis as Michael Ryan. Hit the key points only — "
-            "the leader, the biggest waste of potential, and one dig. "
-            "2-3 SHORT paragraphs, max 100 words total. Tight. No waffle. "
-            "Do NOT use quotation marks around the whole thing."
-        )
-
-    prompt = character + progress_note + task
-    text = _call_haiku(api_key, prompt, max_tokens=200)
-    return text
-
-
-MULLANE_IMG = "john_mullane.jpg"
-
-
-def generate_mullane_view(rows, ranks, predictions, michael_text=None,
-                          api_key=None, tournament_progress=None,
-                          model=None):
-    """Generate a 'Mullane's Take' rebuttal to Michael Ryan's commentary."""
-    if not api_key:
-        api_key = os.environ.get("ANTHROPIC_API_KEY")
-    if not api_key:
-        return None
-
-    standings_lines = []
-    for name, scores, total in rows:
-        golfer_parts = []
-        for p, s, thru, _ in scores:
-            if s is not None:
-                thru_s = str(thru) if thru else ""
-                extras = []
-                if thru_s.isdigit():
-                    extras.append(f"thru {thru_s}")
-                elif thru_s.startswith("F"):
-                    extras.append("finished")
-                elif ":" in thru_s:
-                    extras.append(f"tee time {thru_s}")
-                if model and p in model:
-                    m = model[p]
-                    if m["rank"] <= 15:
-                        expected = "elite"
-                    elif m["rank"] <= 35:
-                        expected = "strong"
-                    elif m["rank"] <= 60:
-                        expected = "mid-tier"
-                    else:
-                        expected = "longshot"
-                    extras.append(f"ranked {expected}")
-                extra_str = ", " + ", ".join(extras) if extras else ""
-                golfer_parts.append(f"{p} ({fmt_total(s)}{extra_str})")
-        golfers = ", ".join(golfer_parts)
-        standings_lines.append(
-            f"  {name} {fmt_total(total)} — picks: {golfers}")
-    standings = "\n".join(standings_lines)
 
     # Tournament calibration
     progress_note = ""
@@ -987,76 +900,33 @@ def generate_mullane_view(rows, ranks, predictions, michael_text=None,
         progress_note = (
             f"\n\nIMPORTANT: {tournament_progress}. "
             "Do NOT overstate any lead — a one or two shot lead this early "
-            "means nothing. Keep perspective, boy."
+            "means nothing. Factor this into your convoluted reasoning."
         )
 
-    character = (
-        "You are John Mullane from Waterford city, Ireland. You are a "
-        "legendary Waterford hurler and De La Salle man. You're now an "
-        "RTE pundit known for being passionate, fiery, and emotional.\n\n"
-        "Your speech patterns (WATERFORD CITY through and through):\n"
-        "- 'boy' and 'biy' constantly — end of sentences, mid-sentence, "
-        "everywhere. It's your signature.\n"
-        "- 'like' as a filler everywhere\n"
-        "- 'I'll tell ya boy', 'listen here boy', 'come on boy'\n"
-        "- 'fierce', 'savage', 'unreal' as intensifiers\n"
-        "- Fast, animated, passionate delivery. Short punchy sentences.\n"
-        "- You get EMOTIONAL about picks. You take it personally.\n"
-        "- References: Walsh Park, the Quay, De La Salle, the Déise\n"
-        "- You relate everything to hurling — golfers are like hurlers, "
-        "scores are like championship results\n"
-        "- You are the OPPOSITE of Michael Ryan. He's measured and deadpan; "
-        "you're animated and passionate. He's country; you're city.\n"
-        "- You fundamentally disagree with Michael's analysis. Whatever "
-        "he praised, you question. Whatever he dismissed, you defend. "
-        "You think his GAA analogies are wrong.\n"
-        "- Occasionally misspell a golfer's name or get golf terms "
-        "confidently wrong, like a man who only watches hurling.\n\n"
-        "DIGS: If anyone's picks are doing badly, tear into them boy. "
-        "Compare bad picks to lads who'd be dropped from the panel, "
-        "fellas who shouldn't be let near a hurl. Be extra savage on:\n"
-        "- Jonathan Flavin — boring picks boy, no imagination, like a "
-        "manager who picks the same fifteen every Sunday\n"
-        "- P\u00e1draig Connery — everything goes wrong for him boy, cursed "
-        "like a team that hasn't won a Munster since the famine\n"
-        "- Noel Smyth — hasn't a clue boy, picked like a man who "
-        "never saw a golf club in his life\n"
-    )
-
-    character += (
-        "\n" + ENTRANT_BIOS
-        + "You MUST work in at least one pun or play on words referencing "
-        "an entrant's job, nickname, or interests boy. Don't state it "
-        "directly — make it a sly pun. E.g. 'Seward's picks should be "
-        "arrested boy', 'Noel's squad has no fitness in dem', 'Flavin "
-        "can't prescribe a cure for dem picks boy', 'Connery's harvest "
-        "is rotten this year like'. Never explain de joke boy.\n"
-    )
-
-    if michael_text:
+    if prev_hackett and changes_block:
         task = (
-            f"\nMichael Ryan just said this:\n\"{michael_text}\"\n"
-            f"\nCurrent standings:\n{standings}\n\n"
-            "Respond to Michael BY NAME — call him out directly "
-            "(e.g. 'Ah here Michael boy', 'Michael's wrong on this one boy', "
-            "'I'll tell ya Michael'). Make it clear you're responding to him. "
-            "Disagree with his key points — contradict his assessment, "
-            "back different entrants, question his analogies. Be passionate. "
-            "2-3 SHORT paragraphs, max 100 words total. Tight. Punchy. "
+            f"\nYour previous column was:\n\"{prev_hackett}\"\n"
+            f"\nCurrent standings:\n{standings}"
+            f"{changes_block}\n\n"
+            "Give your updated alternate angle. React to the changes but "
+            "arrive at an unexpected conclusion via circular logic. "
+            "Don't repeat your previous points. "
+            "2-3 paragraphs, max 120 words total. Let the logic meander. "
             "Do NOT use quotation marks around the whole thing."
         )
     else:
         task = (
             f"\nHere are the current standings in a Masters golf sweepstake:\n"
             f"{standings}\n\n"
-            "Give your take as John Mullane. Be passionate, pick a "
-            "different angle to the obvious one. Back an underdog. "
-            "2-3 SHORT paragraphs, max 100 words total. Tight. Punchy. "
+            "Give your alternate angle on the standings. Find a take that "
+            "nobody else would arrive at. Start reasonable, get tangled, "
+            "end somewhere unexpected. "
+            "2-3 paragraphs, max 120 words total. Let the logic meander. "
             "Do NOT use quotation marks around the whole thing."
         )
 
     prompt = character + progress_note + task
-    text = _call_haiku(api_key, prompt, max_tokens=200)
+    text = _call_haiku(api_key, prompt, max_tokens=250)
     return text
 
 
@@ -1431,32 +1301,17 @@ def render_html(rows, out_path, updated_at, deltas, predictions=None, commentary
             except (ValueError, AttributeError):
                 time_str = ts_raw
             text = entry.get("text", "")
-            if entry.get("type") == "michael":
+            if entry.get("type") == "hackett":
                 comm_entries.append(
-                    f'<div class="comm-entry guest-entry michael-entry">'
+                    f'<div class="comm-entry guest-entry hackett-entry">'
                     f'<span class="comm-time">{esc(time_str)}</span>'
                     f'<div class="comm-text">'
                     f'<div class="guest-banner">'
-                    f'<img src="{MICHAEL_RYAN_IMG}" class="guest-img michael-border" '
-                    f'alt="Michael Ryan">'
+                    f'<img src="{DICK_HACKETT_IMG}" class="guest-img" '
+                    f'alt="Dick Hackett">'
                     f'<div class="guest-name-block">'
-                    f'<span class="guest-label michael-color">Michael\'s View</span>'
-                    f'<span class="guest-subtitle">Thoughts from the Nire Valley</span>'
-                    f'</div></div>'
-                    f'<span class="guest-text">{esc(text)}</span>'
-                    f'</div></div>'
-                )
-            elif entry.get("type") == "mullane":
-                comm_entries.append(
-                    f'<div class="comm-entry guest-entry mullane-entry">'
-                    f'<span class="comm-time">{esc(time_str)}</span>'
-                    f'<div class="comm-text">'
-                    f'<div class="guest-banner">'
-                    f'<img src="{MULLANE_IMG}" class="guest-img mullane-border" '
-                    f'alt="John Mullane">'
-                    f'<div class="guest-name-block">'
-                    f'<span class="guest-label mullane-color">Mullane\'s Take</span>'
-                    f'<span class="guest-subtitle">The View from the Quay</span>'
+                    f'<span class="guest-label hackett-color">Hackett\'s Alternate Angle</span>'
+                    f'<span class="guest-subtitle">The View from West Waterford</span>'
                     f'</div></div>'
                     f'<span class="guest-text">{esc(text)}</span>'
                     f'</div></div>'
@@ -1752,8 +1607,7 @@ def render_html(rows, out_path, updated_at, deltas, predictions=None, commentary
     color: var(--dark);
   }}
   .guest-entry .comm-text {{ color: var(--dark) !important; }}
-  .michael-color {{ color: #1a3f7a; }}
-  .mullane-color {{ color: #8b1a1a; }}
+  .hackett-color {{ color: #4a6741; }}
   @media (max-width: 640px) {{
     body {{ padding: 1rem .5rem; font-size: 14px; }}
     h1 {{ font-size: 1.1rem; }}
@@ -1926,51 +1780,35 @@ def main():
         ts = now.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
         # Separate guest entries from regular commentary
-        michael_entries = [e for e in commentary if e.get("type") == "michael"]
-        mullane_entries = [e for e in commentary if e.get("type") == "mullane"]
-        regular = [e for e in commentary
-                   if e.get("type") not in ("michael", "mullane")]
+        # Drop legacy michael/mullane entries
+        commentary = [e for e in commentary
+                      if e.get("type") not in ("michael", "mullane")]
+        hackett_entries = [e for e in commentary if e.get("type") == "hackett"]
+        regular = [e for e in commentary if e.get("type") != "hackett"]
 
-        def _regenerate_michael():
-            """Generate a fresh Michael's View (delta from previous)."""
-            prev_text = michael_entries[0]["text"] if michael_entries else None
+        def _regenerate_hackett():
+            """Generate a fresh Dick Hackett column (delta from previous)."""
+            prev_text = hackett_entries[0]["text"] if hackett_entries else None
             prev_sc = None
-            if michael_entries:
-                m_ts = michael_entries[0].get("ts")
-                if m_ts:
+            if hackett_entries:
+                h_ts = hackett_entries[0].get("ts")
+                if h_ts:
                     for snap in reversed(history):
-                        if "scores" in snap and snap["ts"] <= m_ts:
+                        if "scores" in snap and snap["ts"] <= h_ts:
                             prev_sc = snap["scores"]
                             break
-            text = generate_michael_view(
+            text = generate_hackett_view(
                 rows, ranks, predictions,
-                prev_michael=prev_text, prev_scores=prev_sc,
+                prev_hackett=prev_text, prev_scores=prev_sc,
                 tournament_progress=tournament_progress, model=model,
             )
             if text:
-                return [{"ts": ts, "text": text, "type": "michael"}]
-            return michael_entries
+                return [{"ts": ts, "text": text, "type": "hackett"}]
+            return hackett_entries
 
-        def _regenerate_pair():
-            """Generate Michael + Mullane as a pair. Mullane reacts to Michael."""
-            m_entries = _regenerate_michael()
-            m_text = m_entries[0]["text"] if m_entries else None
-            mul_text = generate_mullane_view(
-                rows, ranks, predictions, michael_text=m_text,
-                tournament_progress=tournament_progress, model=model,
-            )
-            # Mullane gets timestamp 1s after Michael so he sorts right below
-            mul = []
-            if mul_text:
-                mul_ts = (now.astimezone(timezone.utc)
-                          + timedelta(seconds=1)
-                          ).strftime("%Y-%m-%dT%H:%M:%SZ")
-                mul = [{"ts": mul_ts, "text": mul_text, "type": "mullane"}]
-            return m_entries, mul or mullane_entries
-
-        # Refresh the pair ~1 in MICHAEL_FREQUENCY builds
-        if random.randint(1, MICHAEL_FREQUENCY) == 1 or not michael_entries or not mullane_entries:
-            michael_entries, mullane_entries = _regenerate_pair()
+        # Refresh Hackett ~1 in GUEST_FREQUENCY builds
+        if random.randint(1, GUEST_FREQUENCY) == 1 or not hackett_entries:
+            hackett_entries = _regenerate_hackett()
 
         # Try AI commentary for live changes (only add if something changed)
         entry = generate_ai_commentary(
@@ -1989,21 +1827,20 @@ def main():
             if fresh:
                 regular = [{"ts": ts, "text": fresh}]
 
-        # Merge: guests always kept, regular fills remaining slots
-        guest_entries = michael_entries[:1] + mullane_entries[:1]
+        # Merge: Hackett always kept, regular fills remaining slots
+        guest_entries = hackett_entries[:1]
         max_regular = COMMENTARY_MAX - len(guest_entries)
         regular = regular[:max_regular]
         commentary = guest_entries + regular
         commentary.sort(key=lambda e: e.get("ts", ""), reverse=True)
 
-        # Guarantee the pair — if either is missing, regenerate both
-        has_michael = any(e.get("type") == "michael" for e in commentary)
-        has_mullane = any(e.get("type") == "mullane" for e in commentary)
-        if not has_michael or not has_mullane:
-            michael_entries, mullane_entries = _regenerate_pair()
-            guest_entries = michael_entries[:1] + mullane_entries[:1]
+        # Guarantee Hackett — if missing, regenerate
+        has_hackett = any(e.get("type") == "hackett" for e in commentary)
+        if not has_hackett:
+            hackett_entries = _regenerate_hackett()
+            guest_entries = hackett_entries[:1]
             regular_only = [e for e in commentary
-                            if e.get("type") not in ("michael", "mullane")]
+                            if e.get("type") != "hackett"]
             regular_only = regular_only[:COMMENTARY_MAX - len(guest_entries)]
             commentary = guest_entries + regular_only
             commentary.sort(key=lambda e: e.get("ts", ""), reverse=True)
@@ -2019,10 +1856,8 @@ def main():
             shutil.copy(BANNER_SRC, os.path.join("_site", BANNER_SRC))
         else:
             print(f"Warning: {BANNER_SRC} not found; site banner will be missing")
-        if os.path.exists(MICHAEL_RYAN_IMG):
-            shutil.copy(MICHAEL_RYAN_IMG, os.path.join("_site", MICHAEL_RYAN_IMG))
-        if os.path.exists(MULLANE_IMG):
-            shutil.copy(MULLANE_IMG, os.path.join("_site", MULLANE_IMG))
+        if os.path.exists(DICK_HACKETT_IMG):
+            shutil.copy(DICK_HACKETT_IMG, os.path.join("_site", DICK_HACKETT_IMG))
 
         print("\nWrote _site/index.html, _site/standings.png, _site/history.json, _site/banner.jpg")
 
