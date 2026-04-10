@@ -597,11 +597,29 @@ def generate_ai_commentary(rows, ranks, history, predictions,
 
     prev_ranks, prev_scores = {}, {}
     if not is_first:
+        # Compare against the snapshot from when the last commentary was
+        # generated (by timestamp), not just the most recent snapshot.
+        # This prevents missing changes that were already recorded in
+        # intermediate snapshots.
+        last_comm_ts = None
+        if existing_commentary:
+            last_comm_ts = existing_commentary[0].get("ts")
         prev = None
         for snap in reversed(history):
-            if "scores" in snap:
+            if "scores" not in snap:
+                continue
+            if last_comm_ts and snap["ts"] <= last_comm_ts:
                 prev = snap
                 break
+            elif not last_comm_ts:
+                prev = snap
+                break
+        if not prev:
+            # Fall back to most recent snapshot with scores
+            for snap in reversed(history):
+                if "scores" in snap:
+                    prev = snap
+                    break
         if not prev:
             return None
         prev_ranks = prev.get("ranks", {})
