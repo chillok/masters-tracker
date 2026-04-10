@@ -1310,7 +1310,7 @@ def render_html(rows, out_path, updated_at, deltas, predictions=None, commentary
                     f'<img src="{DICK_HACKETT_IMG}" class="guest-img" '
                     f'alt="Dick Hackett">'
                     f'<div class="guest-name-block">'
-                    f'<span class="guest-label hackett-color">Hackett\'s Alternate Angle</span>'
+                    f'<span class="guest-label hackett-color">Dick Hackett\'s Alternate Angle</span>'
                     f'<span class="guest-subtitle">The View from West Waterford</span>'
                     f'</div></div>'
                     f'<span class="guest-text">{esc(text)}</span>'
