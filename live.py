@@ -746,7 +746,8 @@ GUEST_FREQUENCY = 8  # generate roughly 1 in every N builds
 # Personal info on entrants — used in all commentary prompts for colour
 ENTRANT_BIOS = (
     "Background info on the entrants (use for colour and banter):\n"
-    "- Noel Smyth: owns fitness gyms, businessman & fitness instructor, loves Guinness\n"
+    "- Noel Smyth: owns fitness gyms, businessman & fitness instructor, loves Guinness "
+    "but can't handle his drink. Rides a Harley Davidson.\n"
     "- Jonathan Flavin: owns a physio clinic, nicknamed 'The Guinness Storehouse' "
     "because he can drink an enormous amount of Guinness\n"
     "- Jason Seward: is a Guard (policeman), mad Liverpool fan — "
@@ -758,13 +759,14 @@ ENTRANT_BIOS = (
     "Brother-in-law of Cillian O'Keeffe.\n"
     "- P\u00e1draig Connery: tillage farmer, older brother of Kieran Connery. "
     "The Connery brothers own and race horses.\n"
-    "- Cormac Allen: nurse, nickname 'Nurse'\n"
+    "- Cormac Allen: nurse, nickname 'Nurse'. Doesn't drive.\n"
     "- Fintan Walsh: rugby and GAA TV producer\n"
     "- Barry Dunne: coach with Waterford GAA, also the local quizmaster\n"
     "- Cillian O'Keeffe: software engineer, brother-in-law of Sean Tobin. "
     "Still plays GAA at 40 years of age.\n"
     "- Kieran Connery: IT project manager, younger brother of P\u00e1draig. "
-    "The Connery brothers own and race horses. Still plays GAA at 40.\n"
+    "The Connery brothers own and race horses. Still plays GAA at 40. "
+    "Does Hyrox competitions.\n"
 )
 
 
