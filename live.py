@@ -670,7 +670,8 @@ MICHAEL_FREQUENCY = 8  # generate roughly 1 in every N builds
 
 
 def generate_michael_view(rows, ranks, predictions, prev_michael=None,
-                          prev_scores=None, api_key=None):
+                          prev_scores=None, api_key=None,
+                          tournament_progress=None, model=None):
     """Generate a 'Michael's View' guest commentary in the style of
     Michael Ryan from the Nire Valley — deep Comeragh mountains accent,
     GAA manager who relates everything back to hurling and football.
@@ -685,8 +686,31 @@ def generate_michael_view(rows, ranks, predictions, prev_michael=None,
 
     standings_lines = []
     for name, scores, total in rows:
-        golfers = ", ".join(f"{p} ({fmt_total(s)})" for p, s, _, _ in scores
-                            if s is not None)
+        golfer_parts = []
+        for p, s, thru, _ in scores:
+            if s is not None:
+                thru_s = str(thru) if thru else ""
+                extras = []
+                if thru_s.isdigit():
+                    extras.append(f"thru {thru_s}")
+                elif thru_s.startswith("F"):
+                    extras.append("finished")
+                elif ":" in thru_s:
+                    extras.append(f"tee time {thru_s}")
+                if model and p in model:
+                    m = model[p]
+                    if m["rank"] <= 15:
+                        expected = "elite"
+                    elif m["rank"] <= 35:
+                        expected = "strong"
+                    elif m["rank"] <= 60:
+                        expected = "mid-tier"
+                    else:
+                        expected = "longshot"
+                    extras.append(f"ranked {expected}")
+                extra_str = ", " + ", ".join(extras) if extras else ""
+                golfer_parts.append(f"{p} ({fmt_total(s)}{extra_str})")
+        golfers = ", ".join(golfer_parts)
         standings_lines.append(
             f"  {name} {fmt_total(total)} — picks: {golfers}")
     standings = "\n".join(standings_lines)
@@ -764,6 +788,15 @@ def generate_michael_view(rows, ranks, predictions, prev_michael=None,
         "acknowledge you might be wrong.\n"
     )
 
+    # Tournament calibration — prevent overstating leads early on
+    progress_note = ""
+    if tournament_progress:
+        progress_note = (
+            f"\n\nIMPORTANT: {tournament_progress}. "
+            "Do NOT overstate any lead or declare anyone 'running away with it' "
+            "— a one or two shot lead this early means nothing. Keep perspective."
+        )
+
     if prev_michael and changes_block:
         task = (
             f"\nYour previous commentary was:\n\"{prev_michael}\"\n"
@@ -785,7 +818,7 @@ def generate_michael_view(rows, ranks, predictions, prev_michael=None,
             "Do NOT use quotation marks around the whole thing."
         )
 
-    prompt = character + task
+    prompt = character + progress_note + task
     text = _call_haiku(api_key, prompt, max_tokens=200)
     return text
 
@@ -794,7 +827,8 @@ MULLANE_IMG = "john_mullane.jpg"
 
 
 def generate_mullane_view(rows, ranks, predictions, michael_text=None,
-                          api_key=None):
+                          api_key=None, tournament_progress=None,
+                          model=None):
     """Generate a 'Mullane's Take' rebuttal to Michael Ryan's commentary."""
     if not api_key:
         api_key = os.environ.get("ANTHROPIC_API_KEY")
@@ -803,11 +837,43 @@ def generate_mullane_view(rows, ranks, predictions, michael_text=None,
 
     standings_lines = []
     for name, scores, total in rows:
-        golfers = ", ".join(f"{p} ({fmt_total(s)})" for p, s, _, _ in scores
-                            if s is not None)
+        golfer_parts = []
+        for p, s, thru, _ in scores:
+            if s is not None:
+                thru_s = str(thru) if thru else ""
+                extras = []
+                if thru_s.isdigit():
+                    extras.append(f"thru {thru_s}")
+                elif thru_s.startswith("F"):
+                    extras.append("finished")
+                elif ":" in thru_s:
+                    extras.append(f"tee time {thru_s}")
+                if model and p in model:
+                    m = model[p]
+                    if m["rank"] <= 15:
+                        expected = "elite"
+                    elif m["rank"] <= 35:
+                        expected = "strong"
+                    elif m["rank"] <= 60:
+                        expected = "mid-tier"
+                    else:
+                        expected = "longshot"
+                    extras.append(f"ranked {expected}")
+                extra_str = ", " + ", ".join(extras) if extras else ""
+                golfer_parts.append(f"{p} ({fmt_total(s)}{extra_str})")
+        golfers = ", ".join(golfer_parts)
         standings_lines.append(
             f"  {name} {fmt_total(total)} — picks: {golfers}")
     standings = "\n".join(standings_lines)
+
+    # Tournament calibration
+    progress_note = ""
+    if tournament_progress:
+        progress_note = (
+            f"\n\nIMPORTANT: {tournament_progress}. "
+            "Do NOT overstate any lead — a one or two shot lead this early "
+            "means nothing. Keep perspective, boy."
+        )
 
     character = (
         "You are John Mullane from Waterford city, Ireland. You are a "
@@ -855,7 +921,7 @@ def generate_mullane_view(rows, ranks, predictions, michael_text=None,
             "Do NOT use quotation marks around the whole thing."
         )
 
-    prompt = character + task
+    prompt = character + progress_note + task
     text = _call_haiku(api_key, prompt, max_tokens=200)
     return text
 
@@ -1735,6 +1801,7 @@ def main():
             text = generate_michael_view(
                 rows, ranks, predictions,
                 prev_michael=prev_text, prev_scores=prev_sc,
+                tournament_progress=tournament_progress, model=model,
             )
             if text:
                 return [{"ts": ts, "text": text, "type": "michael"}]
@@ -1746,6 +1813,7 @@ def main():
             m_text = m_entries[0]["text"] if m_entries else None
             mul_text = generate_mullane_view(
                 rows, ranks, predictions, michael_text=m_text,
+                tournament_progress=tournament_progress, model=model,
             )
             # Mullane gets timestamp 1s after Michael so he sorts right below
             mul = []
