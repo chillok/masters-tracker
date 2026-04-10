@@ -8,6 +8,7 @@ Usage:
     python3 live.py --site       # write _site/index.html + _site/standings.png
 """
 import re, json, urllib.request, sys, subprocess, os, shutil, html as html_mod, csv, random, math
+from collections import Counter
 from datetime import datetime, timezone
 from zoneinfo import ZoneInfo
 
@@ -525,7 +526,20 @@ def _build_standings_prompt(rows, ranks, prev_ranks, prev_scores, predictions,
         ex = f" ({', '.join(extras)})" if extras else ""
         lines.append(f"  {_ordinal(rank)}: {name} {fmt_total(total)}{ex}"
                       f" \u2014 picks: {golfers}")
-    standings = "\n".join(lines)
+    # Count how many entrants picked each golfer
+    golfer_counts = Counter()
+    for _, scores, _ in rows:
+        for p, s, _, _ in scores:
+            golfer_counts[p] += 1
+    shared = sorted(((p, c) for p, c in golfer_counts.items() if c > 1),
+                    key=lambda x: -x[1])
+    if shared:
+        shared_line = "\nShared players: " + ", ".join(
+            f"{p} (picked by {c} entrants)" for p, c in shared)
+    else:
+        shared_line = ""
+
+    standings = "\n".join(lines) + shared_line
 
     pred_line = ""
     if predictions:
