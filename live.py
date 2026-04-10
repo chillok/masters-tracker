@@ -668,6 +668,25 @@ MICHAEL_RYAN_IMG = "michael_ryan.jpg"
 
 MICHAEL_FREQUENCY = 8  # generate roughly 1 in every N builds
 
+# Personal info on entrants — used in all commentary prompts for colour
+ENTRANT_BIOS = (
+    "Background info on the entrants (use for colour and banter):\n"
+    "- Noel Smyth: owns fitness gyms, businessman & fitness instructor, loves Guinness\n"
+    "- Jonathan Flavin: owns a physio clinic, nicknamed 'The Guinness Storehouse' "
+    "because he can drink an enormous amount of Guinness\n"
+    "- Jason Seward: is a Guard (policeman), mad Liverpool fan — "
+    "and Liverpool are going terribly at the moment\n"
+    "- Sean Fleming: in the army, a golfer himself, nickname 'Beag'\n"
+    "- Sean Tobin: a blow-in from Kilkenny, thinks he knows golf "
+    "better than the rest of us\n"
+    "- P\u00e1draig Connery: tillage farmer\n"
+    "- Cormac Allen: nurse, nickname 'Nurse'\n"
+    "- Fintan Walsh: rugby and GAA TV producer\n"
+    "- Barry Dunne: coach with Waterford GAA\n"
+    "- Cillian O'Keeffe: software engineer\n"
+    "- Kieran Connery: IT project manager\n"
+)
+
 
 def generate_michael_view(rows, ranks, predictions, prev_michael=None,
                           prev_scores=None, api_key=None,
@@ -797,6 +816,8 @@ def generate_michael_view(rows, ranks, predictions, prev_michael=None,
         "a match in his life\n"
     )
 
+    character += "\n" + ENTRANT_BIOS
+
     # Tournament calibration — prevent overstating leads early on
     progress_note = ""
     if tournament_progress:
@@ -916,6 +937,8 @@ def generate_mullane_view(rows, ranks, predictions, michael_text=None,
         "- Noel Smyth — hasn't a clue boy, picked like a man who "
         "never saw a golf club in his life\n"
     )
+
+    character += "\n" + ENTRANT_BIOS
 
     if michael_text:
         task = (
@@ -1054,7 +1077,10 @@ def generate_ai_commentary(rows, ranks, history, predictions,
         "he's doing. Acted like a genius at selection time.\n\n"
         "Other running jokes (use occasionally):\n"
         "- Quietly optimistic spin on Barry Dunne even when he's clearly struggling\n"
-        "Keep digs wry and comic, not genuinely mean-spirited."
+        "Keep digs wry and comic, not genuinely mean-spirited.\n\n"
+        + ENTRANT_BIOS
+        + "Use this info to personalise digs — e.g. reference someone's "
+        "job, nickname, or interests when slagging their picks."
     )
 
     accuracy = (
