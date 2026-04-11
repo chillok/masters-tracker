@@ -744,9 +744,16 @@ def _call_haiku(api_key, prompt, max_tokens=120):
         },
     )
     try:
+        print(f"  [debug] Calling Haiku API ({max_tokens} tokens)...")
         with urllib.request.urlopen(req, timeout=30) as r:
             resp = json.load(r)
-        return resp["content"][0]["text"].strip().strip('"')
+        text = resp["content"][0]["text"].strip().strip('"')
+        print(f"  [debug] Haiku returned {len(text)} chars")
+        return text
+    except urllib.error.HTTPError as e:
+        body = e.read().decode("utf-8", errors="replace")[:200]
+        print(f"Haiku API call failed: HTTP {e.code} — {body}")
+        return None
     except Exception as e:
         print(f"Haiku API call failed ({e})")
         return None
