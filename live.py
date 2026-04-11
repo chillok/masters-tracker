@@ -396,7 +396,7 @@ def build_trajectory_summary(history, current_ranks, current_scores):
     )
 
 
-COMMENTARY_RESET = True  # One-shot: nuke all, Trump only
+COMMENTARY_RESET = False
 
 def load_commentary():
     """Load previous commentary entries from _site or deployed site."""
