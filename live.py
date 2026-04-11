@@ -753,6 +753,8 @@ def _call_haiku(api_key, prompt, max_tokens=120):
 
 
 DICK_HACKETT_IMG = "dick_hackett.jpg"
+JOHN_KIELY_IMG = "john_kiely.jpg"
+KIELY_PREVIEW_AUDIO = "kiely_preview.mp3"
 
 GUEST_FREQUENCY = 8  # generate roughly 1 in every N builds
 
@@ -1651,6 +1653,52 @@ def render_html(rows, out_path, updated_at, deltas, predictions=None, commentary
   }}
   .guest-entry .comm-text {{ color: var(--dark) !important; }}
   .hackett-color {{ color: #4a6741; }}
+  .day-preview {{
+    margin-bottom: 1.5rem;
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--green);
+    border-radius: 0 6px 6px 0;
+    background: var(--cream);
+    box-shadow: 0 1px 3px rgba(0,0,0,.06);
+    padding: .9rem 1.2rem;
+    display: flex;
+    align-items: center;
+    gap: 1.2rem;
+  }}
+  .day-preview .preview-img {{
+    width: 160px;
+    height: 160px;
+    min-width: 160px;
+    border-radius: 50%;
+    object-fit: cover;
+    flex-shrink: 0;
+  }}
+  .day-preview .preview-right {{
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+  }}
+  .day-preview .preview-title {{
+    font-family: Georgia, 'Times New Roman', serif;
+    font-size: 1.3rem;
+    font-weight: 700;
+    font-style: italic;
+    color: var(--green);
+    line-height: 1.1;
+  }}
+  .day-preview .preview-subtitle {{
+    font-size: .72rem;
+    color: var(--muted);
+    font-style: italic;
+    letter-spacing: .03em;
+    margin-bottom: .6rem;
+  }}
+  .day-preview audio {{
+    width: 100%;
+    border-radius: 6px;
+  }}
   @media (max-width: 640px) {{
     body {{ padding: 1rem .5rem; font-size: 14px; }}
     h1 {{ font-size: 1.1rem; }}
@@ -1661,6 +1709,9 @@ def render_html(rows, out_path, updated_at, deltas, predictions=None, commentary
     .predictions {{ padding: .8rem; }}
     .pred-bar-track {{ min-width: 40px; }}
     .commentary {{ padding: .5rem .8rem; }}
+    .day-preview {{ padding: .6rem .8rem; gap: .8rem; }}
+    .day-preview .preview-img {{ width: 100px; height: 100px; min-width: 100px; }}
+    .day-preview .preview-title {{ font-size: 1.1rem; }}
   }}
 </style>
 </head>
@@ -1670,6 +1721,16 @@ def render_html(rows, out_path, updated_at, deltas, predictions=None, commentary
     <img class="banner" src="banner.jpg" alt="">
     <h1>The Guinness Storehouse LIVE STANDINGS</h1>
     <div class="meta">Updated {esc(updated_str)} · <span class="rel-time" data-iso="{esc(updated_iso)}">just now</span></div>
+  </div>
+  <div class="day-preview">
+    <img src="{JOHN_KIELY_IMG}" class="preview-img" alt="John Jackson Kiely">
+    <div class="preview-right">
+      <div class="preview-title">Day 3 Preview</div>
+      <div class="preview-subtitle">John Jackson Kiely &middot; The Voice of Waterford Football</div>
+      <audio controls preload="metadata">
+        <source src="{KIELY_PREVIEW_AUDIO}" type="audio/mpeg">
+      </audio>
+    </div>
   </div>
   {comm_section}
   <div class="table-wrap">
@@ -1904,6 +1965,10 @@ def main():
             print(f"Warning: {BANNER_SRC} not found; site banner will be missing")
         if os.path.exists(DICK_HACKETT_IMG):
             shutil.copy(DICK_HACKETT_IMG, os.path.join("_site", DICK_HACKETT_IMG))
+        if os.path.exists(JOHN_KIELY_IMG):
+            shutil.copy(JOHN_KIELY_IMG, os.path.join("_site", JOHN_KIELY_IMG))
+        if os.path.exists(KIELY_PREVIEW_AUDIO):
+            shutil.copy(KIELY_PREVIEW_AUDIO, os.path.join("_site", KIELY_PREVIEW_AUDIO))
 
         print("\nWrote _site/index.html, _site/standings.png, _site/history.json, _site/banner.jpg")
 
