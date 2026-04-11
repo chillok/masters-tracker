@@ -22,6 +22,15 @@ BBC_ALIASES = {
     "Matt Fitzpatrick": "Matthew Fitzpatrick",
 }
 
+# Players removed from BBC leaderboard after missing the cut.
+# Scores are their final total-to-par after R2.
+CUT_PLAYERS = {
+    "Cameron Smith":    {"total": 7,  "raw_total": "+7",  "status": "CUT"},
+    "Nicolai Hojgaard": {"total": 6,  "raw_total": "+6",  "status": "CUT"},
+    "Min Woo Lee":      {"total": 11, "raw_total": "+11", "status": "CUT"},
+    "Ryan Fox":         {"total": 5,  "raw_total": "+5",  "status": "CUT"},
+}
+
 BBC_URL = "https://www.bbc.com/sport/golf/leaderboard"
 ENTRANTS_PATH = "entrants.json"
 SITE_URL = "https://chillok.github.io/masters-tracker"
@@ -88,6 +97,8 @@ def thru_display(s):
     if s is None:
         return "—"
     s = s.strip()
+    if s == "CUT":
+        return "CUT"
     if ":" in s:
         return f"tee {s}"
     if s in ("-", ""):
@@ -1778,7 +1789,10 @@ def main():
         for pick in e["players"]:
             name = pick["name"]
             rec = players.get(BBC_ALIASES.get(name, name))
-            if rec is None:
+            if rec is None and name in CUT_PLAYERS:
+                cut = CUT_PLAYERS[name]
+                scores.append((name, cut["total"], "CUT", cut["raw_total"]))
+            elif rec is None:
                 scores.append((name, None, None, "?"))
             else:
                 scores.append((name, rec["total"], rec["thru"], rec["raw_total"]))
