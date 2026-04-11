@@ -759,8 +759,10 @@ def _call_haiku(api_key, prompt, max_tokens=120):
 DICK_HACKETT_IMG = "dick_hackett.jpg"
 JOHN_KIELY_IMG = "john_kiely.jpg"
 KIELY_PREVIEW_AUDIO = "kiely_preview.mp3"
+TRUMP_IMG = "trump.jpg"
 
 GUEST_FREQUENCY = 8  # generate roughly 1 in every N builds
+TRUMP_FREQUENCY = 4  # generate roughly 1 in every N builds
 
 # Personal info on entrants — used in all commentary prompts for colour
 ENTRANT_BIOS = (
@@ -1000,6 +1002,132 @@ def generate_hackett_view(rows, ranks, predictions, prev_hackett=None,
 
     prompt = character + progress_note + task
     text = _call_haiku(api_key, prompt, max_tokens=250)
+    return text
+
+
+def generate_trump_view(rows, ranks, predictions, prev_trump=None,
+                        prev_scores=None, api_key=None,
+                        tournament_progress=None, model=None):
+    """Generate 'The Art of the Eagle' — Trump's hyperbolic take."""
+    if not api_key:
+        api_key = os.environ.get("ANTHROPIC_API_KEY")
+    if not api_key:
+        return None
+
+    standings = _build_guest_standings(rows, model)
+
+    # Build a changes block if we have previous data
+    changes_block = ""
+    if prev_scores:
+        current_scores = {name: total for name, _, total in rows}
+        prev_ranks_map = {}
+        sorted_prev = sorted(prev_scores.items(), key=lambda x: x[1])
+        r = 0
+        last_sc = None
+        for i, (n, sc) in enumerate(sorted_prev, 1):
+            if sc != last_sc:
+                r = i
+                last_sc = sc
+            prev_ranks_map[n] = r
+        changes = []
+        for name, scores, total in rows:
+            ps = prev_scores.get(name)
+            if ps is not None and ps != total:
+                d = total - ps
+                direction = "improved" if d < 0 else "dropped"
+                pr = prev_ranks_map.get(name)
+                cr = ranks[name]
+                rank_move = ""
+                if pr and pr != cr:
+                    rank_move = f", was {_ordinal(pr)} now {_ordinal(cr)}"
+                changes.append(
+                    f"  {name}: {fmt_total(ps)} -> {fmt_total(total)} "
+                    f"({direction} {abs(d)}){rank_move}")
+        if changes:
+            changes_block = (
+                "\n\nKEY CHANGES since your last post:\n"
+                + "\n".join(changes)
+            )
+
+    character = (
+        "You are Donald J. Trump providing commentary on a Masters golf "
+        "sweepstake among friends called 'The Guinness Storehouse'.\n\n"
+        "Your column is called 'The Art of the Eagle'.\n\n"
+        "VOICE & STYLE:\n"
+        "- Classic Trump: hyperbolic, superlative-heavy, repetitive emphasis\n"
+        "- 'Many people are saying', 'Believe me', 'HUGE', 'TREMENDOUS', "
+        "'BIGLY', 'SAD', 'DISASTER', 'the likes of which nobody has ever seen'\n"
+        "- Use CAPS for emphasis on key words\n"
+        "- Self-referential — compare everything to your own deals, towers, "
+        "golf courses, victories\n"
+        "- Rambling, stream-of-consciousness, circling back to your point\n"
+        "- Dismiss anything inconvenient as FAKE NEWS or a HOAX\n"
+        "- You know things. You have sources. Many people tell you things.\n\n"
+        "FAVOURITES (be EXTREMELY positive, OTT, delusional even):\n"
+        "- Kieran Connery — even at +15, dead last, you see GENIUS. "
+        "Scheffler is the number one player in the world. Greatest comeback "
+        "loading. Compare to your own comebacks.\n"
+        "- Barry Dunne — tremendous man, quizmaster, GAA coach. Was in "
+        "finance previously but was SMART enough to get out early — knew "
+        "it was a racket. That's INSTINCT. Always spin him positively.\n"
+        "- Fintan Walsh — incredible TV producer, carrying dead weight, "
+        "shows tremendous CHARACTER. The real story of this tournament.\n"
+        "Spin their bad positions as 'strategic', 'resilient', 'genius'.\n\n"
+        "TARGETS (mock, question, undermine — but NOT every post, ~33% "
+        "chance per person per post, rotate them):\n"
+        "- Sean Tobin — Kilkenny finance man (pensions and investments). "
+        "You know who else was a Kilkenny finance man? DJ Carey. Convicted "
+        "of fraud. You're not saying anything, but people should look into "
+        "it. Downplay his achievements, question his position. SUSPICIOUS.\n"
+        "- Jonathan Flavin — The Guinness Storehouse. Was leading Day 1, "
+        "now in freefall. Question his recent INVESTMENTS. Very bad "
+        "judgment. Many people are saying it.\n"
+        "- Noel Smyth — gym owner, rides a Harley. All show. Mock the "
+        "gym, mock the motorcycle, mock the picks. Low energy.\n"
+        "- Pádraig Connery — calls himself a 'large farmer'. LARGE? "
+        "You own golf courses bigger than his entire operation. Very "
+        "average. Mediocre acreage. Question everything about his position "
+        "— call his score a HOAX, say Rory is doing all the work.\n\n"
+        "IMPORTANT RULES:\n"
+        "- Do NOT mention every person in every post. Pick 2-3 to focus on.\n"
+        "- Rotate targets — ~33% chance per person per post\n"
+        "- Always be positive about at least ONE of Kieran/Barry/Fintan\n"
+        "- Call unfavourable facts FAKE NEWS or HOAXES\n"
+        "- Keep it comic, not genuinely offensive\n"
+        "- Do NOT use hashtags or emojis\n"
+        "- 2-3 paragraphs, max 150 words total\n"
+        "- Do NOT use quotation marks around the whole thing\n"
+    )
+
+    # Tournament calibration
+    progress_note = ""
+    if tournament_progress:
+        progress_note = (
+            f"\n\nIMPORTANT: {tournament_progress}. "
+            "Factor this into your hot takes."
+        )
+
+    if prev_trump and changes_block:
+        task = (
+            f"\nYour previous post was:\n\"{prev_trump}\"\n"
+            f"\nCurrent standings:\n{standings}"
+            f"{changes_block}\n\n"
+            "React to the changes in your style. Don't repeat your "
+            "previous points — find new angles, new targets, new "
+            "superlatives. 2-3 paragraphs, max 150 words total."
+        )
+    else:
+        task = (
+            f"\nHere are the current standings in a Masters golf sweepstake:\n"
+            f"{standings}\n\n"
+            "Give your FIRST take on the standings. Summarise the state "
+            "of play in your inimitable style. Who's winning (and why "
+            "it's FAKE), who's REALLY going to win, who's a DISASTER. "
+            "2-3 paragraphs, max 150 words total."
+        )
+
+    prompt = character + progress_note + task
+    text = _call_haiku(api_key, prompt, max_tokens=300)
     return text
 
 
@@ -1398,6 +1526,21 @@ def render_html(rows, out_path, updated_at, deltas, predictions=None, commentary
                     f'<span class="guest-text">{esc(text)}</span>'
                     f'</div></div>'
                 )
+            elif entry.get("type") == "trump":
+                comm_entries.append(
+                    f'<div class="comm-entry guest-entry trump-entry">'
+                    f'<span class="comm-time">{esc(time_str)}</span>'
+                    f'<div class="comm-text">'
+                    f'<div class="guest-banner">'
+                    f'<img src="{TRUMP_IMG}" class="guest-img" '
+                    f'alt="Donald J. Trump">'
+                    f'<div class="guest-name-block">'
+                    f'<span class="guest-label trump-color">The Art of the Eagle</span>'
+                    f'<span class="guest-subtitle">Donald J. Trump</span>'
+                    f'</div></div>'
+                    f'<span class="guest-text">{esc(text)}</span>'
+                    f'</div></div>'
+                )
             else:
                 comm_entries.append(
                     f'<div class="comm-entry">'
@@ -1693,6 +1836,8 @@ def render_html(rows, out_path, updated_at, deltas, predictions=None, commentary
   }}
   .guest-entry .comm-text {{ color: var(--dark) !important; }}
   .hackett-color {{ color: #4a6741; }}
+  .trump-color {{ color: #c41e3a; }}
+  .trump-entry {{ border-left-color: #c41e3a !important; }}
   .day-preview {{
     margin-bottom: 1.5rem;
     border: 1px solid var(--border);
@@ -1930,14 +2075,59 @@ def main():
         commentary = [e for e in commentary
                       if e.get("type") not in ("michael", "mullane", "hackett")]
 
-        # Only add commentary when scores actually changed
+        # Separate Trump entries from regular commentary
+        trump_entries = [e for e in commentary if e.get("type") == "trump"]
+        regular = [e for e in commentary if e.get("type") != "trump"]
+
+        # Trump: refresh ~1 in TRUMP_FREQUENCY builds, or always if none exists
+        def _regenerate_trump():
+            prev_text = trump_entries[0]["text"] if trump_entries else None
+            prev_sc = None
+            if trump_entries:
+                t_ts = trump_entries[0].get("ts")
+                if t_ts:
+                    for snap in reversed(history):
+                        if "scores" in snap and snap["ts"] <= t_ts:
+                            prev_sc = snap["scores"]
+                            break
+            text = generate_trump_view(
+                rows, ranks, predictions,
+                prev_trump=prev_text, prev_scores=prev_sc,
+                tournament_progress=tournament_progress, model=model,
+            )
+            if text:
+                return [{"ts": ts, "text": text, "type": "trump"}]
+            return trump_entries
+
+        if random.randint(1, TRUMP_FREQUENCY) == 1 or not trump_entries:
+            trump_entries = _regenerate_trump()
+
+        # Only add regular commentary when scores actually changed
         entry = generate_ai_commentary(
-            rows, ranks, history, predictions, commentary,
+            rows, ranks, history, predictions, regular,
             tournament_progress=tournament_progress, model=model,
         )
         if entry:
-            commentary = [{"ts": ts, "text": entry}] + commentary
-            commentary = commentary[:COMMENTARY_MAX]
+            regular = [{"ts": ts, "text": entry}] + regular
+            regular = regular[:COMMENTARY_MAX]
+
+        # Merge: Trump always kept, regular fills remaining slots
+        guest_entries = trump_entries[:1]
+        max_regular = COMMENTARY_MAX - len(guest_entries)
+        regular = regular[:max_regular]
+        commentary = guest_entries + regular
+        commentary.sort(key=lambda e: e.get("ts", ""), reverse=True)
+
+        # Guarantee Trump — if missing, regenerate
+        has_trump = any(e.get("type") == "trump" for e in commentary)
+        if not has_trump:
+            trump_entries = _regenerate_trump()
+            guest_entries = trump_entries[:1]
+            regular_only = [e for e in commentary
+                            if e.get("type") != "trump"]
+            regular_only = regular_only[:COMMENTARY_MAX - len(guest_entries)]
+            commentary = guest_entries + regular_only
+            commentary.sort(key=lambda e: e.get("ts", ""), reverse=True)
 
         save_commentary(commentary, os.path.join("_site", COMMENTARY_FILENAME))
 
@@ -1956,6 +2146,8 @@ def main():
             shutil.copy(JOHN_KIELY_IMG, os.path.join("_site", JOHN_KIELY_IMG))
         if os.path.exists(KIELY_PREVIEW_AUDIO):
             shutil.copy(KIELY_PREVIEW_AUDIO, os.path.join("_site", KIELY_PREVIEW_AUDIO))
+        if os.path.exists(TRUMP_IMG):
+            shutil.copy(TRUMP_IMG, os.path.join("_site", TRUMP_IMG))
 
         print("\nWrote _site/index.html, _site/standings.png, _site/history.json, _site/banner.jpg")
 
