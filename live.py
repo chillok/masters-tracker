@@ -85,6 +85,8 @@ def score_val(s):
 
 
 def thru_display(s):
+    if s is None:
+        return "—"
     s = s.strip()
     if ":" in s:
         return f"tee {s}"
