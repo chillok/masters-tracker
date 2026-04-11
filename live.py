@@ -1004,49 +1004,43 @@ def generate_hackett_view(rows, ranks, predictions, prev_hackett=None,
 
 
 def generate_ai_commentary(rows, ranks, history, predictions,
-                           existing_commentary, is_first=False,
+                           existing_commentary,
                            tournament_progress=None, model=None):
     """Use Claude to generate natural commentary. Returns str or None."""
     api_key = os.environ.get("ANTHROPIC_API_KEY")
     if not api_key:
         return None
 
-    prev_ranks, prev_scores = {}, {}
-    if not is_first:
-        # Compare against the snapshot from when the last commentary was
-        # generated (by timestamp), not just the most recent snapshot.
-        # This prevents missing changes that were already recorded in
-        # intermediate snapshots.
-        last_comm_ts = None
-        if existing_commentary:
-            last_comm_ts = existing_commentary[0].get("ts")
-        prev = None
+    # Only generate commentary when entrant scores/ranks actually changed
+    # since the last commentary entry was written.
+    if not existing_commentary:
+        # No previous commentary — need a baseline first; wait for next change
+        return None
+    last_comm_ts = existing_commentary[0].get("ts")
+    prev = None
+    for snap in reversed(history):
+        if "scores" not in snap:
+            continue
+        if last_comm_ts and snap["ts"] <= last_comm_ts:
+            prev = snap
+            break
+    if not prev:
+        # Fall back to most recent snapshot with scores
         for snap in reversed(history):
-            if "scores" not in snap:
-                continue
-            if last_comm_ts and snap["ts"] <= last_comm_ts:
+            if "scores" in snap:
                 prev = snap
                 break
-            elif not last_comm_ts:
-                prev = snap
-                break
-        if not prev:
-            # Fall back to most recent snapshot with scores
-            for snap in reversed(history):
-                if "scores" in snap:
-                    prev = snap
-                    break
-        if not prev:
-            return None
-        prev_ranks = prev.get("ranks", {})
-        prev_scores = prev.get("scores", {})
-        current_scores = {name: total for name, _, total in rows}
-        if not any(
-            ranks.get(n) != prev_ranks.get(n)
-            or current_scores.get(n) != prev_scores.get(n)
-            for n in ranks
-        ):
-            return None
+    if not prev:
+        return None
+    prev_ranks = prev.get("ranks", {})
+    prev_scores = prev.get("scores", {})
+    current_scores = {name: total for name, _, total in rows}
+    if not any(
+        ranks.get(n) != prev_ranks.get(n)
+        or current_scores.get(n) != prev_scores.get(n)
+        for n in ranks
+    ):
+        return None
 
     standings, pred_line, prev_lines = _build_standings_prompt(
         rows, ranks, prev_ranks, prev_scores, predictions,
@@ -1066,16 +1060,7 @@ def generate_ai_commentary(rows, ranks, history, predictions,
         '- +1, +2, +3 etc. are WORSE than even, not "at or better than even".'
     )
 
-    if is_first:
-        task = (
-            "This is the end-of-R1 summary. Summarise the standings "
-            "\u2014 who leads, who's the best individual pick, any "
-            "interesting storylines (e.g. a great golfer whose entrant "
-            "is held back by other picks)."
-            "\n\nWrite 2\u20133 sentences, max 60 words."
-        )
-    else:
-        task = (
+    task = (
             "This is a live update. Focus on what changed since the "
             "last update \u2014 key players dropping or gaining shots, "
             "score swings, position changes. Mention specific golfers "
