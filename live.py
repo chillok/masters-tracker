@@ -1727,7 +1727,7 @@ def render_html(rows, out_path, updated_at, deltas, predictions=None, commentary
     <div class="preview-right">
       <div class="preview-title">Day 3 Preview</div>
       <div class="preview-subtitle">John Jackson Kiely &middot; The Voice of Waterford Football</div>
-      <audio controls preload="metadata">
+      <audio controls preload="none">
         <source src="{KIELY_PREVIEW_AUDIO}" type="audio/mpeg">
       </audio>
     </div>
