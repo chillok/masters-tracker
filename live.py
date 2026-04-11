@@ -396,7 +396,7 @@ def build_trajectory_summary(history, current_ranks, current_scores):
     )
 
 
-COMMENTARY_RESET = False
+COMMENTARY_RESET = True
 
 def load_commentary():
     """Load previous commentary entries from _site or deployed site."""
