@@ -396,7 +396,7 @@ def build_trajectory_summary(history, current_ranks, current_scores):
     )
 
 
-COMMENTARY_RESET = True  # One-shot: wipe old commentary for Day 3 fresh start
+COMMENTARY_RESET = False
 
 def load_commentary():
     """Load previous commentary entries from _site or deployed site."""
@@ -744,12 +744,9 @@ def _call_haiku(api_key, prompt, max_tokens=120):
         },
     )
     try:
-        print(f"  [debug] Calling Haiku API ({max_tokens} tokens)...")
         with urllib.request.urlopen(req, timeout=30) as r:
             resp = json.load(r)
-        text = resp["content"][0]["text"].strip().strip('"')
-        print(f"  [debug] Haiku returned {len(text)} chars")
-        return text
+        return resp["content"][0]["text"].strip().strip('"')
     except urllib.error.HTTPError as e:
         body = e.read().decode("utf-8", errors="replace")[:200]
         print(f"Haiku API call failed: HTTP {e.code} — {body}")
