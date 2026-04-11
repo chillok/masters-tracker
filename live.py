@@ -396,7 +396,7 @@ def build_trajectory_summary(history, current_ranks, current_scores):
     )
 
 
-COMMENTARY_RESET = False
+COMMENTARY_RESET = True  # One-shot: clear Hackett from deployed commentary
 
 def load_commentary():
     """Load previous commentary entries from _site or deployed site."""
@@ -1941,71 +1941,18 @@ def main():
         commentary = load_commentary()
         ts = now.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
-        # Separate guest entries from regular commentary
-        # Drop legacy michael/mullane entries
+        # Drop legacy guest entries (hackett, michael, mullane)
         commentary = [e for e in commentary
-                      if e.get("type") not in ("michael", "mullane")]
-        hackett_entries = [e for e in commentary if e.get("type") == "hackett"]
-        regular = [e for e in commentary if e.get("type") != "hackett"]
+                      if e.get("type") not in ("michael", "mullane", "hackett")]
 
-        def _regenerate_hackett():
-            """Generate a fresh Dick Hackett column (delta from previous)."""
-            prev_text = hackett_entries[0]["text"] if hackett_entries else None
-            prev_sc = None
-            if hackett_entries:
-                h_ts = hackett_entries[0].get("ts")
-                if h_ts:
-                    for snap in reversed(history):
-                        if "scores" in snap and snap["ts"] <= h_ts:
-                            prev_sc = snap["scores"]
-                            break
-            text = generate_hackett_view(
-                rows, ranks, predictions,
-                prev_hackett=prev_text, prev_scores=prev_sc,
-                tournament_progress=tournament_progress, model=model,
-            )
-            if text:
-                return [{"ts": ts, "text": text, "type": "hackett"}]
-            return hackett_entries
-
-        # Refresh Hackett ~1 in GUEST_FREQUENCY builds
-        if random.randint(1, GUEST_FREQUENCY) == 1 or not hackett_entries:
-            hackett_entries = _regenerate_hackett()
-
-        # Try AI commentary for live changes (only add if something changed)
+        # Only add commentary when scores actually changed
         entry = generate_ai_commentary(
-            rows, ranks, history, predictions, regular,
+            rows, ranks, history, predictions, commentary,
             tournament_progress=tournament_progress, model=model,
         )
         if entry:
-            regular = [{"ts": ts, "text": entry}] + regular
-            regular = regular[:COMMENTARY_MAX]
-        elif not regular:
-            # Only generate a summary if we have no commentary at all
-            fresh = generate_ai_commentary(
-                rows, ranks, history, predictions, regular, is_first=True,
-                tournament_progress=tournament_progress, model=model,
-            )
-            if fresh:
-                regular = [{"ts": ts, "text": fresh}]
-
-        # Merge: Hackett always kept, regular fills remaining slots
-        guest_entries = hackett_entries[:1]
-        max_regular = COMMENTARY_MAX - len(guest_entries)
-        regular = regular[:max_regular]
-        commentary = guest_entries + regular
-        commentary.sort(key=lambda e: e.get("ts", ""), reverse=True)
-
-        # Guarantee Hackett — if missing, regenerate
-        has_hackett = any(e.get("type") == "hackett" for e in commentary)
-        if not has_hackett:
-            hackett_entries = _regenerate_hackett()
-            guest_entries = hackett_entries[:1]
-            regular_only = [e for e in commentary
-                            if e.get("type") != "hackett"]
-            regular_only = regular_only[:COMMENTARY_MAX - len(guest_entries)]
-            commentary = guest_entries + regular_only
-            commentary.sort(key=lambda e: e.get("ts", ""), reverse=True)
+            commentary = [{"ts": ts, "text": entry}] + commentary
+            commentary = commentary[:COMMENTARY_MAX]
 
         save_commentary(commentary, os.path.join("_site", COMMENTARY_FILENAME))
 
