@@ -396,7 +396,7 @@ def build_trajectory_summary(history, current_ranks, current_scores):
     )
 
 
-COMMENTARY_RESET = False
+COMMENTARY_RESET = True  # One-shot: wipe old commentary for Day 3 fresh start
 
 def load_commentary():
     """Load previous commentary entries from _site or deployed site."""
@@ -744,7 +744,7 @@ def _call_haiku(api_key, prompt, max_tokens=120):
         },
     )
     try:
-        with urllib.request.urlopen(req, timeout=15) as r:
+        with urllib.request.urlopen(req, timeout=30) as r:
             resp = json.load(r)
         return resp["content"][0]["text"].strip().strip('"')
     except Exception as e:
