@@ -762,7 +762,7 @@ KIELY_PREVIEW_AUDIO = "kiely_preview.mp3"
 TRUMP_IMG = "trump.jpg"
 
 GUEST_FREQUENCY = 8  # generate roughly 1 in every N builds
-TRUMP_FREQUENCY = 4  # generate roughly 1 in every N builds
+TRUMP_FREQUENCY = 12  # generate roughly 1 in every N builds (~1 per hour)
 
 # Personal info on entrants — used in all commentary prompts for colour
 ENTRANT_BIOS = (
