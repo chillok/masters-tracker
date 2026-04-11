@@ -1152,6 +1152,10 @@ def generate_trump_view(rows, ranks, predictions, prev_trump=None,
             "Give your FIRST take on the standings. Summarise the state "
             "of play in your inimitable style. Who's winning (and why "
             "it's FAKE), who's REALLY going to win, who's a DISASTER. "
+            "You MUST go hard on the THREE IMMIGRANTS — "
+            "Fintan (Dublin blow-in), Tobin (Kilkenny blow-in), and "
+            "Noel (another blow-in with a women's gym). All three are "
+            "outsiders who invaded Clashmore. Deportation. Build the wall. "
             "2-3 paragraphs, max 150 words total."
         )
 
