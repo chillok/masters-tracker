@@ -1145,6 +1145,8 @@ def generate_trump_view(rows, ranks, predictions, prev_trump=None,
             "Give your FIRST take on the standings. Summarise the state "
             "of play in your inimitable style. Who's winning (and why "
             "it's FAKE), who's REALLY going to win, who's a DISASTER. "
+            "You MUST include a dig at Fintan Walsh — the Dublin "
+            "IMMIGRANT living in Waterford. Deportation talk. "
             "2-3 paragraphs, max 150 words total."
         )
 
