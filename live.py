@@ -396,7 +396,7 @@ def build_trajectory_summary(history, current_ranks, current_scores):
     )
 
 
-COMMENTARY_RESET = False
+COMMENTARY_RESET = True  # One-shot: force Trump regen hitting all 3 immigrants
 
 def load_commentary():
     """Load previous commentary entries from _site or deployed site."""
@@ -1139,7 +1139,11 @@ def generate_trump_view(rows, ranks, predictions, prev_trump=None,
             f"{changes_block}\n\n"
             "React to the changes in your style. Don't repeat your "
             "previous points — find new angles, new targets, new "
-            "superlatives. 2-3 paragraphs, max 150 words total."
+            "superlatives. You MUST go hard on the THREE IMMIGRANTS — "
+            "Fintan (Dublin), Tobin (Kilkenny), and Noel (blow-in). "
+            "All three are outsiders taking over Clashmore. Deportation. "
+            "Build the wall. Send them ALL back. "
+            "2-3 paragraphs, max 150 words total."
         )
     else:
         task = (
