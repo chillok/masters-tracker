@@ -2121,7 +2121,8 @@ def main():
                 return [{"ts": ts, "text": text, "type": "trump"}]
             return trump_entries
 
-        if random.randint(1, TRUMP_FREQUENCY) == 1 or not trump_entries:
+        # Only generate Trump when there isn't one — never overwrite
+        if not trump_entries:
             trump_entries = _regenerate_trump()
 
         # Only add regular commentary when scores actually changed
