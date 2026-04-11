@@ -6,7 +6,7 @@ on:
     # public repos; the real driver is cron-job.org hitting the
     # sync-worker on Cloudflare every 5 min. This schedule acts as a
     # coarse fallback if the external pinger goes down.
-    - cron: "*/30 * * * *"
+    - cron: "*/30 13-23 * * *"
   workflow_dispatch:
   push:
     branches: [main]
