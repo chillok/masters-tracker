@@ -396,7 +396,7 @@ def build_trajectory_summary(history, current_ranks, current_scores):
     )
 
 
-COMMENTARY_RESET = True  # One-shot: force Trump regen with anti-Fintan
+COMMENTARY_RESET = False
 
 def load_commentary():
     """Load previous commentary entries from _site or deployed site."""
@@ -1145,8 +1145,6 @@ def generate_trump_view(rows, ranks, predictions, prev_trump=None,
             "Give your FIRST take on the standings. Summarise the state "
             "of play in your inimitable style. Who's winning (and why "
             "it's FAKE), who's REALLY going to win, who's a DISASTER. "
-            "You MUST include a dig at Fintan Walsh — the Dublin "
-            "IMMIGRANT living in Waterford. Deportation talk. "
             "2-3 paragraphs, max 150 words total."
         )
 
