@@ -2126,8 +2126,10 @@ def main():
             trump_entries = _regenerate_trump()
 
         # Only add regular commentary when scores actually changed
+        # Use Trump as baseline if no regular commentary exists
+        baseline = regular if regular else trump_entries
         entry = generate_ai_commentary(
-            rows, ranks, history, predictions, regular,
+            rows, ranks, history, predictions, baseline,
             tournament_progress=tournament_progress, model=model,
         )
         if entry:
